@@ -1,0 +1,1310 @@
+<title>Panacea CRM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --bg:#F7F5EC; --surface:#FFFFFF; --surface-2:#F0EDE1; --border:#E3DFCF;
+    --ink:#152420; --ink-muted:#5D6E67; --ink-faint:#8B978F; --shadow:rgba(15,46,39,.14);
+    --teal-900:#0F2E27; --teal-800:#153B32; --teal-700:#1B4A3F; --teal-tint:#E4ECE8;
+    --gold:#B9922E; --gold-dark:#8F701E; --gold-light:#E7C765; --gold-tint:#F7EFD9;
+    --success:#2E7D5B; --success-tint:#E1F0E8;
+    --warning:#C77D22; --warning-tint:#FBEBD6;
+    --critical:#B23B3B; --critical-tint:#F8E4E1;
+    --info:#3B6FB2; --info-tint:#E4ECF6;
+    --radius-lg:22px; --radius-md:14px; --radius-sm:9px;
+    --font-display:'Sora',ui-sans-serif,system-ui,sans-serif;
+    --font-body:'Karla',ui-sans-serif,system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; height:100%;}
+  svg{width:1em; height:1em; flex:none; vertical-align:-0.125em;}
+  body{font-family:var(--font-body); -webkit-font-smoothing:antialiased; overscroll-behavior-y:none; background:var(--teal-900);}
+  h1,h2,h3,.disp{font-family:var(--font-display); text-wrap:balance; letter-spacing:-.01em;}
+  .mono{font-family:var(--font-mono); font-variant-numeric:tabular-nums;}
+  button{font-family:inherit;}
+  a{color:inherit;}
+  ::selection{background:#F7EFD9; color:#0F2E27;}
+  @media (prefers-reduced-motion: reduce){ *{animation-duration:.001ms !important; transition-duration:.001ms !important;} }
+
+  /* app fills the real viewport — always the brand/light theme, same design
+     the approved prototype locked the phone-mock screen to */
+  .app-shell{
+    position:fixed; inset:0; background:#fff;
+    --bg:#F7F5EC; --surface:#FFFFFF; --surface-2:#F0EDE1; --border:#E3DFCF;
+    --ink:#152420; --ink-muted:#5D6E67; --ink-faint:#8B978F; --shadow:rgba(15,46,39,.14);
+    --teal-tint:#E4ECE8; --gold-tint:#F7EFD9;
+    --success-tint:#E1F0E8; --warning-tint:#FBEBD6; --critical-tint:#F8E4E1; --info-tint:#E4ECF6;
+    display:flex; flex-direction:column; font-size:15.5px; color:#16231F; overflow:hidden;
+  }
+  .app-bar{
+    background:linear-gradient(155deg, var(--teal-900), var(--teal-800));
+    color:#fff; padding:max(20px,env(safe-area-inset-top)) 16px 14px; flex:none; position:relative;
+  }
+  .app-bar .row1{display:flex; align-items:center; justify-content:space-between; gap:.5rem;}
+  .app-bar .who{display:flex; align-items:center; gap:.5rem; min-width:0;}
+  .app-bar .glyph{color:var(--gold-light); font-size:1.15rem; flex:none;}
+  .app-bar .role-name{font-family:var(--font-display); font-weight:700; font-size:1.02rem;}
+  .app-bar .sub{font-size:.72rem; color:#BFD2CB; margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .bar-actions{display:flex; gap:.4rem; flex:none;}
+  .bell-btn,.logout-btn{position:relative; background:rgba(255,255,255,.12); border:none; width:34px; height:34px; border-radius:50%; display:grid; place-items:center; color:#fff; cursor:pointer;}
+  .bell-btn svg,.logout-btn svg{width:16px; height:16px;}
+  .bell-dot{position:absolute; top:6px; right:6px; width:8px; height:8px; border-radius:50%; background:var(--gold-light); border:1.5px solid var(--teal-900);}
+  .tabs-strip{display:flex; gap:.4rem; margin-top:14px; overflow-x:auto; scrollbar-width:none;}
+  .tabs-strip::-webkit-scrollbar{display:none;}
+  .tabs-strip button{
+    flex:none; border:1px solid rgba(255,255,255,.22); background:rgba(255,255,255,.08); color:#EAF1EE;
+    font-size:.74rem; font-weight:600; padding:.4rem .75rem; border-radius:999px; cursor:pointer;
+  }
+  .tabs-strip button[aria-selected="true"]{background:var(--gold); border-color:var(--gold); color:#1B1608;}
+
+  .content{flex:1; overflow-y:auto; background:var(--bg); position:relative;}
+  .content-pad{padding:16px 16px 34px;}
+
+  .kanban{display:flex; gap:12px; overflow-x:auto; padding:14px 14px 14px; scroll-snap-type:x proximity; height:100%;}
+  .kanban::-webkit-scrollbar{height:5px;}
+  .column{flex:none; width:270px; scroll-snap-align:start; display:flex; flex-direction:column; max-height:100%;}
+  .column-head{display:flex; align-items:center; justify-content:space-between; padding:0 2px 8px;}
+  .column-head .name{font-family:var(--font-display); font-weight:700; font-size:.82rem; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-muted);}
+  .column-count{font-family:var(--font-mono); font-size:.72rem; background:var(--surface-2); color:var(--ink-muted); border-radius:999px; padding:.05rem .45rem;}
+  .column-body{display:flex; flex-direction:column; gap:9px; overflow-y:auto; padding-bottom:8px; flex:1;}
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md);
+    padding:.75rem .8rem; text-align:left; cursor:pointer; box-shadow:0 1px 2px var(--shadow);
+    display:flex; flex-direction:column; gap:.4rem; width:100%;
+  }
+  .card:hover{border-color:var(--gold);}
+  .card .name{font-weight:700; font-size:.9rem; line-height:1.25;}
+  .card .meta{color:var(--ink-muted); font-size:.78rem;}
+  .card .foot{display:flex; align-items:center; justify-content:space-between; margin-top:.15rem; flex-wrap:wrap; gap:.3rem;}
+  .card .money{font-family:var(--font-mono); font-weight:600; font-size:.82rem; color:var(--teal-900);}
+
+  .chip{display:inline-flex; align-items:center; gap:.3rem; font-size:.68rem; font-weight:700; padding:.2rem .5rem; border-radius:999px; white-space:nowrap;}
+  .chip svg{width:10px; height:10px;}
+  .chip-ok{background:var(--success-tint); color:var(--success);}
+  .chip-warn{background:var(--warning-tint); color:var(--warning);}
+  .chip-crit{background:var(--critical-tint); color:var(--critical);}
+  .chip-info{background:var(--info-tint); color:var(--info);}
+  .chip-gold{background:var(--gold-tint); color:var(--gold-dark);}
+  .chip-neutral{background:var(--surface-2); color:var(--ink-muted);}
+
+  .empty-col{border:1.5px dashed var(--border); border-radius:var(--radius-md); padding:1rem .7rem; color:var(--ink-faint); font-size:.78rem; text-align:center;}
+
+  .list{display:flex; flex-direction:column; gap:10px;}
+  .row-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:.8rem .85rem; cursor:pointer; box-shadow:0 1px 2px var(--shadow);}
+  .row-card:hover{border-color:var(--gold);}
+  .row-top{display:flex; justify-content:space-between; align-items:flex-start; gap:.5rem;}
+  .row-title{font-weight:700; font-size:.9rem;}
+  .row-title svg{width:13px; height:13px; margin-right:1px;}
+  .row-sub{color:var(--ink-muted); font-size:.78rem; margin-top:2px;}
+  .pending-banner{
+    display:flex; gap:.5rem; align-items:flex-start; background:var(--critical-tint); color:var(--critical);
+    border-radius:var(--radius-sm); padding:.5rem .6rem; font-size:.76rem; margin-top:.5rem; font-weight:600;
+  }
+  .pending-banner svg{width:14px; height:14px; flex:none; margin-top:1px;}
+
+  .section-label{font-family:var(--font-display); font-weight:700; font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-muted); margin:0 0 .6rem;}
+
+  .stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:1.1rem;}
+  .stat-tile{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:.75rem .8rem;}
+  .stat-tile .n{font-family:var(--font-mono); font-weight:600; font-size:1.35rem; color:var(--teal-900);}
+  .stat-tile .l{font-size:.72rem; color:var(--ink-muted); margin-top:1px;}
+  .dept-btn{width:100%; text-align:left; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:.8rem .85rem; cursor:pointer; display:flex; align-items:center; gap:.6rem; margin-bottom:9px;}
+  .dept-btn:hover{border-color:var(--gold);}
+  .dept-btn .ic{width:34px; height:34px; border-radius:10px; background:var(--teal-tint); color:var(--teal-900); display:grid; place-items:center; flex:none;}
+  .dept-btn .ic svg{width:16px; height:16px;}
+  .dept-btn .tt{font-weight:700; font-size:.86rem;}
+  .dept-btn .ss{font-size:.75rem; color:var(--ink-muted);}
+  .dept-btn .arrow{margin-left:auto; color:var(--ink-faint); width:14px; height:14px;}
+  .dept-btn .arrow svg{width:14px; height:14px;}
+
+  .switcher{padding:12px 14px 2px; display:flex; flex-direction:column; gap:6px;}
+  .switch-label{font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-faint);}
+  .switch-row{display:flex; flex-wrap:wrap; gap:.35rem;}
+  .switch-row button{border:1px solid var(--border); background:var(--surface); color:var(--ink); font-size:.72rem; font-weight:700; padding:.32rem .65rem; border-radius:999px; cursor:pointer; white-space:nowrap;}
+  .switch-row button[aria-pressed="true"]{background:var(--teal-900); border-color:var(--teal-900); color:#fff;}
+
+  .alert-item{display:flex; gap:.55rem; align-items:flex-start; padding:.65rem 0; border-bottom:1px solid var(--border);}
+  .alert-item:last-child{border-bottom:none;}
+  .alert-ic{width:26px; height:26px; border-radius:8px; display:grid; place-items:center; flex:none;}
+  .alert-ic svg{width:13px; height:13px;}
+  .alert-tx{font-size:.8rem; line-height:1.35;}
+  .alert-tx b{font-weight:700;}
+
+  .field{margin-bottom:.85rem; display:flex; flex-direction:column; gap:.3rem;}
+  .field label{font-size:.74rem; font-weight:700; color:var(--ink-muted); text-transform:uppercase; letter-spacing:.03em;}
+  .field select, .field textarea, .field input{
+    border:1px solid var(--border); border-radius:var(--radius-sm); padding:.55rem .65rem; font-family:inherit; font-size:.87rem;
+    background:var(--surface); color:var(--ink); resize:vertical;
+  }
+  .field select:focus, .field textarea:focus, .field input:focus{outline:2px solid var(--gold); outline-offset:1px;}
+  .attach-mock{display:flex; align-items:center; gap:.5rem; border:1.5px dashed var(--border); border-radius:var(--radius-sm); padding:.55rem .65rem; cursor:pointer; font-size:.82rem; color:var(--ink-muted); background:transparent;}
+  .attach-mock:hover{border-color:var(--gold); color:var(--gold-dark);}
+  .attach-mock svg{width:15px; height:15px;}
+  .attach-chip{display:inline-flex; align-items:center; gap:.35rem; background:var(--gold-tint); color:var(--gold-dark); font-size:.76rem; font-weight:600; padding:.3rem .55rem; border-radius:999px; margin-top:.4rem;}
+  .btn{
+    font-family:var(--font-display); font-weight:700; font-size:.84rem; border:none; border-radius:999px;
+    padding:.65rem 1.1rem; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:.4rem; width:100%;
+  }
+  .btn svg{width:14px; height:14px;}
+  .btn:disabled{opacity:.6; cursor:default;}
+  .btn-primary{background:var(--teal-900); color:#fff;}
+  .btn-primary:hover{background:var(--teal-800);}
+  .btn-gold{background:var(--gold); color:#251D08;}
+  .btn-gold:hover{background:var(--gold-dark); color:#fff;}
+  .btn-ghost{background:var(--surface-2); color:var(--ink);}
+  .btn-danger{background:var(--critical-tint); color:var(--critical);}
+  .btn-row{display:flex; flex-direction:column; gap:.55rem; margin-top:1rem;}
+
+  .tabbar{flex:none; display:flex; border-top:1px solid var(--border); background:var(--surface); padding-bottom:env(safe-area-inset-bottom);}
+  .tabbar button{flex:1; background:none; border:none; padding:.55rem .2rem .7rem; display:flex; flex-direction:column; align-items:center; gap:.2rem; cursor:pointer; color:var(--ink-faint);}
+  .tabbar button svg{width:19px; height:19px;}
+  .tabbar button span{font-size:.62rem; font-weight:700;}
+  .tabbar button[aria-selected="true"]{color:var(--teal-900);}
+  .tabbar button[aria-selected="true"] svg{color:var(--gold-dark);}
+
+  .sheet-backdrop{position:fixed; inset:0; background:rgba(10,20,17,.42); z-index:20; opacity:0; pointer-events:none; transition:opacity .18s;}
+  .sheet-backdrop.open{opacity:1; pointer-events:auto;}
+  .sheet{
+    position:fixed; left:0; right:0; bottom:0; max-height:86%; background:var(--surface);
+    border-radius:22px 22px 0 0; z-index:21; padding:1rem 1.1rem calc(1.2rem + env(safe-area-inset-bottom)); box-shadow:0 -10px 30px var(--shadow);
+    transform:translateY(100%); transition:transform .22s ease; display:flex; flex-direction:column;
+  }
+  .sheet.open{transform:translateY(0);}
+  .sheet-handle{width:36px; height:4px; background:var(--border); border-radius:99px; margin:0 auto .7rem;}
+  .sheet-scroll{overflow-y:auto; flex:1;}
+  .sheet h3{margin:0 0 .2rem; font-size:1.02rem;}
+  .sheet .close-x{position:absolute; top:.8rem; right:.9rem; background:var(--surface-2); border:none; width:28px; height:28px; border-radius:50%; display:grid; place-items:center; cursor:pointer; color:var(--ink-muted);}
+  .sheet .close-x svg{width:13px; height:13px;}
+  .kv{display:flex; justify-content:space-between; gap:1rem; padding:.4rem 0; border-bottom:1px solid var(--border); font-size:.82rem;}
+  .kv:last-child{border-bottom:none;}
+  .kv .k{color:var(--ink-muted);}
+  .kv svg{width:12px; height:12px; margin-right:1px;}
+  .kv .v{font-weight:600; text-align:right;}
+  .timeline{display:flex; flex-direction:column; gap:.6rem; margin-top:.3rem;}
+  .tl-item{display:flex; gap:.55rem;}
+  .tl-dot{width:7px; height:7px; border-radius:50%; background:var(--gold); margin-top:.4rem; flex:none;}
+  .tl-tx{font-size:.8rem;}
+  .tl-tx .d{color:var(--ink-faint); font-size:.7rem;}
+
+  .toast{
+    position:fixed; left:50%; bottom:calc(78px + env(safe-area-inset-bottom)); transform:translate(-50%,10px); background:var(--teal-900); color:#fff;
+    padding:.55rem .95rem; border-radius:999px; font-size:.8rem; font-weight:600; box-shadow:0 8px 20px var(--shadow);
+    z-index:30; opacity:0; pointer-events:none; transition:opacity .18s, transform .18s; display:flex; align-items:center; gap:.4rem; max-width:88vw;
+  }
+  .toast.show{opacity:1; transform:translate(-50%,0);}
+  .toast svg{width:14px; height:14px; color:var(--gold-light); flex:none;}
+
+  /* auth screens */
+  .auth-wrap{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2rem 1.3rem; background:linear-gradient(155deg, var(--teal-900), var(--teal-800)); min-height:100%; overflow-y:auto;}
+  .auth-card{width:100%; max-width:360px; background:var(--surface); border-radius:var(--radius-lg); padding:1.8rem 1.6rem; box-shadow:0 20px 50px rgba(0,0,0,.28);}
+  .auth-brand{display:flex; flex-direction:column; align-items:center; gap:.3rem; margin-bottom:1.3rem; text-align:center;}
+  .auth-brand .glyph{font-size:1.7rem; color:var(--gold);}
+  .auth-brand .word{font-family:var(--font-display); font-weight:800; font-size:1.1rem; letter-spacing:.04em; text-transform:uppercase; color:var(--teal-900);}
+  .auth-brand .word small{display:block; font-family:'Karla'; font-weight:400; font-style:italic; text-transform:none; letter-spacing:0; font-size:.74rem; color:var(--ink-muted); margin-top:-2px;}
+  .auth-title{font-family:var(--font-display); font-weight:700; font-size:1.04rem; text-align:center; margin-bottom:.2rem;}
+  .auth-sub{color:var(--ink-muted); font-size:.83rem; text-align:center; margin-bottom:1.2rem;}
+  .auth-error{background:var(--critical-tint); color:var(--critical); font-size:.82rem; font-weight:600; padding:.6rem .7rem; border-radius:var(--radius-sm); margin-bottom:.9rem; display:flex; gap:.4rem; align-items:flex-start;}
+  .auth-error svg{width:14px;height:14px;flex:none;margin-top:1px;}
+  .auth-note{background:var(--success-tint); color:var(--success); font-size:.82rem; font-weight:600; padding:.6rem .7rem; border-radius:var(--radius-sm); margin-bottom:.9rem;}
+  .auth-switch{text-align:center; font-size:.82rem; color:var(--ink-muted); margin-top:1.1rem;}
+  .auth-switch button{background:none;border:none;color:var(--gold-dark);font-weight:700;cursor:pointer;padding:0;font-size:inherit;}
+  .pending-wrap{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2rem 1.4rem; text-align:center; gap:.8rem; background:var(--bg);}
+  .pending-wrap .ic-big{width:52px;height:52px;border-radius:50%;background:var(--gold-tint);color:var(--gold-dark);display:grid;place-items:center;}
+  .pending-wrap .ic-big svg{width:24px;height:24px;}
+  .pending-wrap h2{font-size:1.1rem;margin:0;}
+  .pending-wrap p{color:var(--ink-muted);font-size:.88rem;max-width:32ch;margin:0;}
+  .loading-wrap{flex:1;display:flex;align-items:center;justify-content:center;color:var(--ink-muted);font-size:.86rem;background:var(--bg);}
+</style>
+
+<div class="app-shell" id="appShell"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============== SUPABASE ============== */
+  var SUPABASE_URL = 'https://kefpqytfosjbpncpmdhj.supabase.co';
+  var SUPABASE_KEY = 'sb_publishable_LOmpTBMJ8XNtCkSGjJ4Kmw_Uoh6sW0s';
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  /* ============== ICONS ============== */
+  var ICONS = {
+    kanban:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="9.5" y="4" width="5" height="10" rx="1.5"/><rect x="16" y="4" width="5" height="13" rx="1.5"/></svg>',
+    list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="4.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1.2" fill="currentColor" stroke="none"/><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/></svg>',
+    user:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.4-4 4-6 7.5-6s6.1 2 7.5 6"/></svg>',
+    plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+    alert:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 2.5 20h19L12 4Z"/><line x1="12" y1="10" x2="12" y2="14.5"/><circle cx="12" cy="17.3" r=".4" fill="currentColor" stroke="none"/></svg>',
+    folder:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 6.5a1 1 0 0 1 1-1h5l2 2.2h9a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6.5Z"/></svg>',
+    building:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="3" width="12" height="18" rx="1"/><line x1="7.3" y1="7" x2="7.3" y2="7.01"/><line x1="12.7" y1="7" x2="12.7" y2="7.01"/><line x1="7.3" y1="11" x2="7.3" y2="11.01"/><line x1="12.7" y1="11" x2="12.7" y2="11.01"/><line x1="7.3" y1="15" x2="7.3" y2="15.01"/><line x1="12.7" y1="15" x2="12.7" y2="15.01"/><path d="M16 9h3a1 1 0 0 1 1 1v11h-4"/></svg>',
+    chart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="20" x2="5" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="19" y1="20" x2="19" y2="15"/><line x1="3" y1="20" x2="21" y2="20"/></svg>',
+    bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10a6 6 0 0 1 12 0c0 4 1.4 5.5 2 6.3H4c.6-.8 2-2.3 2-6.3Z"/><path d="M10 19.5a2 2 0 0 0 4 0"/></svg>',
+    chev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>',
+    check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12.5 9.5 18 20 6"/></svg>',
+    clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.3"/><polyline points="12 7.3 12 12 15.5 14"/></svg>',
+    paperclip:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.2 10.6 10 18.8a3.6 3.6 0 0 1-5.1-5.1l8.6-8.6a2.5 2.5 0 0 1 3.6 3.6L8.6 17.2a1.4 1.4 0 0 1-2-2l7.1-7.1"/></svg>',
+    upload:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><polyline points="7.5 8.5 12 4 16.5 8.5"/><path d="M4.5 15v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3"/></svg>',
+    inbox:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12h5l1.6 3h3.8l1.6-3h5"/><path d="M5 5.5h14L21 12v6a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18v-6L5 5.5Z"/></svg>',
+    doc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M7 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5A1.5 1.5 0 0 1 7 3.5Z"/><path d="M14 3.5V8h4"/></svg>',
+    x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>',
+    coin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.3"/><path d="M12 7.5v9M14.6 9.4c-.4-.8-1.3-1.2-2.4-1.2-1.3 0-2.5.7-2.5 1.9 0 2.6 4.8 1.3 4.8 3.9 0 1.2-1.2 1.9-2.5 1.9-1.1 0-2-.4-2.4-1.2"/></svg>',
+    logout:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/><polyline points="15 16 20 11 15 6"/><line x1="20" y1="11" x2="9" y2="11"/></svg>'
+  };
+  function ic(name){ return ICONS[name] || ''; }
+
+  /* ============== STAGE CONFIGS (mesmas do protótipo aprovado) ============== */
+  var LEAD_STAGES = [
+    {key:'novo', label:'Novo lead'},{key:'contato', label:'Contato feito'},{key:'proposta', label:'Proposta enviada'},
+    {key:'negociacao', label:'Negociação'},{key:'fechado', label:'Fechado ✓'},{key:'perdido', label:'Perdido'}
+  ];
+  var TASK_STAGES = [
+    {key:'afazer', label:'A fazer'},{key:'andamento', label:'Em andamento'},{key:'aguardando', label:'Aguardando terceiros'},{key:'concluido', label:'Concluído'}
+  ];
+  var PV_STAGES = [
+    {key:'recebido', label:'Recebido'},{key:'analise', label:'Em análise'},{key:'processando', label:'Na operadora'},{key:'concluido', label:'Concluído'}
+  ];
+  var INCL_STAGES = [
+    {key:'recebido', label:'Recebido do vendedor'},{key:'conferencia', label:'Conferência de docs'},{key:'enviado', label:'Enviado à operadora'},{key:'vigente', label:'Vigência ativa'}
+  ];
+  var FIN_STAGES = [
+    {key:'faturar', label:'A faturar'},{key:'aguardando', label:'Aguardando pagamento'},{key:'pago', label:'Pago'},{key:'inadimplente', label:'Inadimplente'}
+  ];
+  function pvClienteStatus(item){
+    if(item.etapaInterna==='concluido') return {label:'Concluído', cls:'chip-ok', ic:'check'};
+    if(item.etapaInterna==='recebido') return {label:'Recebido', cls:'chip-info', ic:'inbox'};
+    return {label:'Em andamento', cls:'chip-gold', ic:'clock'};
+  }
+  function initials(name){ return (name||'—').split(' ').map(function(w){return w[0];}).slice(0,2).join('').toUpperCase(); }
+
+  /* ============== HELPERS ============== */
+  var fmtMoney = function(n){ return n>0 ? 'R$ ' + n.toLocaleString('pt-BR') : '—'; };
+  function slaChip(dias){
+    if(dias<=2) return '<span class="chip chip-ok">'+ic('clock')+' há '+dias+'d</span>';
+    if(dias<=6) return '<span class="chip chip-warn">'+ic('clock')+' há '+dias+'d</span>';
+    return '<span class="chip chip-crit">'+ic('clock')+' há '+dias+'d</span>';
+  }
+  function expiraChip(dias){
+    var cls = dias<=2 ? 'chip-crit' : dias<=6 ? 'chip-warn' : 'chip-ok';
+    return '<span class="chip '+cls+'">'+ic('doc')+' expira em '+dias+'d</span>';
+  }
+  function shortCode(uuid){ return '#' + String(uuid||'').slice(0,8).toUpperCase(); }
+  function fmtDateBR(dateStr){
+    if(!dateStr) return '—';
+    var d = new Date(dateStr);
+    if(isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
+  }
+  function daysSince(dateStr){
+    if(!dateStr) return 0;
+    var d = new Date(dateStr);
+    if(isNaN(d.getTime())) return 0;
+    return Math.max(0, Math.floor((Date.now() - d.getTime())/86400000));
+  }
+  function daysUntil(dateStr){
+    if(!dateStr) return 0;
+    var d = new Date(dateStr);
+    if(isNaN(d.getTime())) return 0;
+    return Math.max(0, Math.ceil((d.getTime() - Date.now())/86400000));
+  }
+  function computeAtrasada(dateStr, etapa, finalKeys){
+    if(!dateStr) return false;
+    var finals = Array.isArray(finalKeys) ? finalKeys : [finalKeys];
+    if(finals.indexOf(etapa)!==-1) return false;
+    var d = new Date(dateStr);
+    if(isNaN(d.getTime())) return false;
+    var today = new Date(); today.setHours(0,0,0,0);
+    return d < today;
+  }
+  function toneBg(tone){ return tone==='crit' ? 'var(--critical-tint)' : tone==='warn' ? 'var(--warning-tint)' : 'var(--info-tint)'; }
+  function toneFg(tone){ return tone==='crit' ? 'var(--critical)' : tone==='warn' ? 'var(--warning)' : 'var(--info)'; }
+
+  /* ============== PAPÉIS / ABAS (sem seletor livre — cada login já é um papel) ============== */
+  var ROLES_META = {
+    vendedor:{label:'Vendedor', tabs:[{key:'leads',label:'Leads',icon:'kanban'},{key:'clientes',label:'Fechados',icon:'check'},{key:'perfil',label:'Perfil',icon:'user'}]},
+    administrativo:{label:'Administrativo', tabs:[{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'financeiro',label:'Financeiro',icon:'coin'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'visao-adm',label:'Visão geral',icon:'chart'}]},
+    posvendas:{label:'Pós-vendas', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'}]},
+    rh:{label:'RH da Empresa', tabs:[{key:'minhas-rh',label:'Solicitações',icon:'list'},{key:'nova-rh',label:'Nova',icon:'plus'},{key:'desempenho-rh',label:'Desempenho',icon:'chart'},{key:'pendencias-rh',label:'Pendências',icon:'alert'}]},
+    cliente:{label:'Cliente Final', tabs:[{key:'minhas-cli',label:'Meus pedidos',icon:'list'},{key:'pendencias-cli',label:'Pendências',icon:'alert'},{key:'nova-cli',label:'Novo pedido',icon:'plus'}]},
+    gestao:{label:'Gestão', tabs:[{key:'visao-geral',label:'Visão geral',icon:'chart'},{key:'departamentos',label:'Departamentos',icon:'kanban'},{key:'alertas',label:'Alertas',icon:'alert'}]}
+  };
+
+  /* ============== ESTADO ============== */
+  var session = null;
+  var perfil = null; // {id, papel, nome, email, empresaId, empresaNome}
+  var STATE = { leads:[], tasks:[], posvendas:[], inclusaoPropostas:[], financeiro:[] };
+  var posvendasFiltro = 'meus';
+  var currentDept = 'leads';
+  var lastTabByRole = {};
+
+  /* ============== AUTENTICAÇÃO ============== */
+  function loadingHtml(msg){ return '<div class="loading-wrap">'+msg+'</div>'; }
+
+  function authMsg(kind, text){
+    var el = document.getElementById('authMsg');
+    if(!el) return;
+    if(kind==='error') el.innerHTML = '<div class="auth-error">'+ic('alert')+'<span>'+text+'</span></div>';
+    else if(kind==='ok') el.innerHTML = '<div class="auth-note">'+text+'</div>';
+    else el.innerHTML = '';
+  }
+
+  function traduzErroAuth(error){
+    var m = (error && error.message) || '';
+    if(/invalid login credentials/i.test(m)) return 'E-mail ou senha incorretos.';
+    if(/already registered|already exists|User already registered/i.test(m)) return 'Já existe uma conta com esse e-mail — tente entrar.';
+    if(/password should be|at least 6/i.test(m)) return 'A senha precisa ter pelo menos 6 caracteres.';
+    if(/rate limit/i.test(m)) return 'Muitas tentativas — espere um instante e tente de novo.';
+    if(/email/i.test(m) && /invalid/i.test(m)) return 'Esse e-mail não parece válido.';
+    return 'Não deu certo agora — confira os dados e tente novamente.';
+  }
+
+  function renderLogin(mode){
+    mode = mode || 'entrar';
+    var root = document.getElementById('appShell');
+    root.innerHTML =
+      '<div class="auth-wrap"><div class="auth-card">'+
+        '<div class="auth-brand"><span class="glyph">⚜</span><span class="word">Panacea<small>Seguros</small></span></div>'+
+        '<div class="auth-title">'+(mode==='criar' ? 'Criar acesso' : 'Entrar no CRM')+'</div>'+
+        '<div class="auth-sub">'+(mode==='criar' ? 'Depois de criar, avise quem administra o sistema pra liberar seu perfil.' : 'Use o e-mail e senha da sua conta Panacea CRM.')+'</div>'+
+        '<div id="authMsg"></div>'+
+        '<form id="authForm">'+
+          '<div class="field"><label>E-mail</label><input type="email" name="email" required autocomplete="username" /></div>'+
+          '<div class="field"><label>Senha</label><input type="password" name="password" required autocomplete="'+(mode==='criar'?'new-password':'current-password')+'" minlength="6" /></div>'+
+          '<button type="submit" class="btn btn-primary" style="margin-top:.4rem">'+(mode==='criar' ? ic('plus')+' Criar conta' : ic('check')+' Entrar')+'</button>'+
+        '</form>'+
+        '<div class="auth-switch">'+(mode==='criar'
+          ? 'Já tem acesso? <button type="button" id="toEntrar">Entrar</button>'
+          : 'Ainda não tem conta? <button type="button" id="toCriar">Criar acesso</button>')+'</div>'+
+      '</div></div>';
+    document.getElementById('authForm').addEventListener('submit', mode==='criar' ? handleSignup : handleLogin);
+    var toCriar = document.getElementById('toCriar'); if(toCriar) toCriar.addEventListener('click', function(){ renderLogin('criar'); });
+    var toEntrar = document.getElementById('toEntrar'); if(toEntrar) toEntrar.addEventListener('click', function(){ renderLogin('entrar'); });
+  }
+
+  function renderPending(email){
+    var root = document.getElementById('appShell');
+    root.innerHTML =
+      '<div class="pending-wrap">'+
+        '<div class="ic-big">'+ic('clock')+'</div>'+
+        '<h2>Conta criada, aguardando liberação</h2>'+
+        '<p>'+(email ? 'A conta <b>'+email+'</b> ainda' : 'Sua conta ainda')+' não tem um perfil de acesso vinculado. Avise quem administra o Panacea CRM pra liberar seu papel (vendedor, administrativo, pós-vendas, RH ou cliente).</p>'+
+        '<button class="btn btn-ghost" id="pendingLogout" style="width:auto;margin-top:.6rem">'+ic('logout')+' Sair</button>'+
+      '</div>';
+    document.getElementById('pendingLogout').addEventListener('click', function(){ sb.auth.signOut(); });
+  }
+
+  function handleLogin(e){
+    e.preventDefault();
+    authMsg();
+    var form = e.target;
+    var email = form.email.value.trim();
+    var password = form.password.value;
+    var btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    sb.auth.signInWithPassword({ email: email, password: password }).then(function(res){
+      btn.disabled = false;
+      if(res.error){ authMsg('error', traduzErroAuth(res.error)); return; }
+      session = res.data.session;
+      loadPerfilAndStart();
+    });
+  }
+
+  function handleSignup(e){
+    e.preventDefault();
+    authMsg();
+    var form = e.target;
+    var email = form.email.value.trim();
+    var password = form.password.value;
+    var btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    sb.auth.signUp({ email: email, password: password }).then(function(res){
+      btn.disabled = false;
+      if(res.error){ authMsg('error', traduzErroAuth(res.error)); return; }
+      if(res.data.session){ session = res.data.session; loadPerfilAndStart(); }
+      else { authMsg('ok', 'Conta criada! Se pedirmos confirmação por e-mail, confirme e depois volte aqui pra entrar.'); }
+    });
+  }
+
+  function loadPerfilAndStart(){
+    document.getElementById('appShell').innerHTML = loadingHtml('Carregando sua conta...');
+    sb.auth.getUser().then(function(res){
+      var user = res.data && res.data.user;
+      if(!user){ renderLogin(); return; }
+      sb.from('perfis').select('*, empresas(nome)').eq('id', user.id).maybeSingle().then(function(pres){
+        if(pres.error || !pres.data){ renderPending(user.email); return; }
+        var row = pres.data;
+        perfil = { id:row.id, papel:row.papel, nome:row.nome, email:user.email, empresaId:row.empresa_id, empresaNome: row.empresas ? row.empresas.nome : null };
+        if(!lastTabByRole[perfil.papel]) lastTabByRole[perfil.papel] = ROLES_META[perfil.papel].tabs[0].key;
+        document.getElementById('appShell').innerHTML = appFrameHtml();
+        bindShellHandlers();
+        renderAppBar(); renderBottomTabbar();
+        document.getElementById('contentArea').innerHTML = loadingHtml('Carregando dados...');
+        refreshData().then(renderContent);
+      });
+    });
+  }
+
+  function boot(){
+    document.getElementById('appShell').innerHTML = loadingHtml('Carregando...');
+    sb.auth.getSession().then(function(res){
+      session = res.data && res.data.session;
+      if(session){ loadPerfilAndStart(); } else { renderLogin(); }
+    });
+  }
+
+  sb.auth.onAuthStateChange(function(event){
+    if(event === 'SIGNED_OUT'){ session=null; perfil=null; renderLogin(); }
+  });
+
+  /* ============== ARMAÇÃO DO APP (pós-login) ============== */
+  function appFrameHtml(){
+    return (
+      '<div class="app-bar">'+
+        '<div class="row1">'+
+          '<div class="who"><span class="glyph">⚜</span><div>'+
+            '<div class="role-name" id="appBarRole"></div>'+
+            '<div class="sub" id="appBarSub"></div>'+
+          '</div></div>'+
+          '<div class="bar-actions">'+
+            '<button class="bell-btn" id="bellBtn" aria-label="Notificações"><span id="bellIcon"></span><span class="bell-dot" id="bellDot" style="display:none"></span></button>'+
+            '<button class="logout-btn" id="logoutBtn" aria-label="Sair">'+ic('logout')+'</button>'+
+          '</div>'+
+        '</div>'+
+        '<div class="tabs-strip" id="tabsStrip" role="tablist"></div>'+
+      '</div>'+
+      '<div class="content" id="contentArea"></div>'+
+      '<div class="tabbar" id="bottomTabbar"></div>'+
+      '<div class="sheet-backdrop" id="sheetBackdrop"></div>'+
+      '<div class="sheet" id="sheet" role="dialog" aria-modal="true">'+
+        '<button class="close-x" id="sheetClose" aria-label="Fechar">×</button>'+
+        '<div class="sheet-handle"></div>'+
+        '<div class="sheet-scroll" id="sheetBody"></div>'+
+      '</div>'+
+      '<div class="toast" id="toast"></div>'
+    );
+  }
+
+  function bindShellHandlers(){
+    document.getElementById('sheetClose').addEventListener('click', closeSheet);
+    document.getElementById('sheetBackdrop').addEventListener('click', closeSheet);
+    document.getElementById('bellBtn').addEventListener('click', function(){
+      var alerts = computeAlerts();
+      var html = '<h3>Notificações</h3><p class="row-sub" style="margin-bottom:.8rem">O que pede atenção agora.</p>' +
+        (alerts.length ? alerts.map(alertRow).join('') : '<div class="empty-col">Tudo em dia por aqui.</div>');
+      openSheet(html);
+    });
+    document.getElementById('logoutBtn').addEventListener('click', function(){ sb.auth.signOut(); });
+  }
+
+  var toastTimer = null;
+  function showToast(msg){
+    var t = document.getElementById('toast');
+    if(!t) return;
+    t.innerHTML = ic('check') + '<span>'+msg+'</span>';
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2400);
+  }
+
+  function openSheet(html){
+    document.getElementById('sheetBody').innerHTML = html;
+    document.getElementById('sheet').classList.add('open');
+    document.getElementById('sheetBackdrop').classList.add('open');
+  }
+  function closeSheet(){
+    var sheet = document.getElementById('sheet');
+    var bd = document.getElementById('sheetBackdrop');
+    if(sheet) sheet.classList.remove('open');
+    if(bd) bd.classList.remove('open');
+  }
+
+  function alertRow(a){
+    return '<div class="alert-item"><div class="alert-ic" style="background:'+toneBg(a.tone)+';color:'+toneFg(a.tone)+'">'+ic(a.icon)+'</div><div class="alert-tx">'+a.text+'</div></div>';
+  }
+
+  function computeAlerts(){
+    var out = [];
+    STATE.leads.forEach(function(l){
+      if(['fechado','perdido'].indexOf(l.etapa)===-1 && l.dias>=5){
+        out.push({icon:'clock', tone:'warn', text:'Lead <b>'+l.nome+'</b> parado há '+l.dias+' dias em "'+LEAD_STAGES.find(function(s){return s.key===l.etapa;}).label+'".'});
+      }
+    });
+    STATE.tasks.forEach(function(t){
+      if(t.atrasada) out.push({icon:'alert', tone:'crit', text:'Tarefa <b>'+t.titulo+'</b> está atrasada (prazo '+t.prazo+').'});
+    });
+    STATE.inclusaoPropostas.forEach(function(t){
+      if(t.atrasada) out.push({icon:'alert', tone:'crit', text:'Implantação de <b>'+t.empresa+'</b> atrasada (prazo '+t.prazo+').'});
+    });
+    STATE.financeiro.forEach(function(t){
+      if(t.etapa==='inadimplente') out.push({icon:'alert', tone:'crit', text:'<b>'+t.empresa+'</b> está inadimplente — venceu em '+t.vencimento+'.'});
+    });
+    STATE.posvendas.forEach(function(p){
+      (p.anexos||[]).forEach(function(a){
+        if(a.expira<=3) out.push({icon:'doc', tone:'warn', text:'Anexo <b>'+a.nome+'</b> ('+p.empresaOuCliente+') expira em '+a.expira+' dia(s).'});
+      });
+      if(p.pendenciaDoc) out.push({icon:'alert', tone:'crit', text:'Pendência aberta com <b>'+p.empresaOuCliente+'</b>: '+p.pendenciaDescricao});
+    });
+    return out;
+  }
+
+  /* ============== RENDER: armação ============== */
+  function dynamicSub(){
+    if(perfil.papel==='posvendas') return perfil.nome + ' · Time de pós-vendas';
+    if(perfil.papel==='rh') return perfil.nome + ' · ' + (perfil.empresaNome||'');
+    if(perfil.papel==='cliente') return perfil.nome + ' · Segurado(a)';
+    if(perfil.papel==='vendedor') return perfil.nome + ' · Consultor comercial';
+    if(perfil.papel==='administrativo') return perfil.nome + ' · Time administrativo';
+    if(perfil.papel==='gestao') return perfil.nome + ' · Visão de toda a Panacea';
+    return perfil.nome;
+  }
+
+  function renderAppBar(){
+    var meta = ROLES_META[perfil.papel];
+    document.getElementById('appBarRole').textContent = meta.label;
+    document.getElementById('appBarSub').textContent = dynamicSub();
+    document.getElementById('bellIcon').innerHTML = ic('bell');
+    var alerts = computeAlerts();
+    document.getElementById('bellDot').style.display = alerts.length ? 'block' : 'none';
+    var strip = document.getElementById('tabsStrip');
+    strip.innerHTML = meta.tabs.map(function(t){
+      return '<button data-tab="'+t.key+'" aria-selected="'+(t.key===lastTabByRole[perfil.papel])+'">'+t.label+'</button>';
+    }).join('');
+    strip.querySelectorAll('button').forEach(function(b){
+      b.addEventListener('click', function(){ lastTabByRole[perfil.papel]=b.dataset.tab; closeSheet(); renderBottomTabbar(); renderContent(); });
+    });
+  }
+
+  function renderBottomTabbar(){
+    var meta = ROLES_META[perfil.papel];
+    var active = lastTabByRole[perfil.papel];
+    var bar = document.getElementById('bottomTabbar');
+    bar.innerHTML = meta.tabs.map(function(t){
+      return '<button data-tab="'+t.key+'" aria-selected="'+(t.key===active)+'">'+ic(t.icon)+'<span>'+t.label+'</span></button>';
+    }).join('');
+    bar.querySelectorAll('button').forEach(function(b){
+      b.addEventListener('click', function(){ lastTabByRole[perfil.papel]=b.dataset.tab; closeSheet(); renderAppBar(); renderContent(); });
+    });
+  }
+
+  function filterSwitcherHtml(){
+    if(perfil.papel!=='posvendas') return '';
+    return '<div class="switcher">'+
+      '<div class="switch-label">Mostrar</div>'+
+      '<div class="switch-row">'+
+        '<button data-switch="posvendas-filtro" data-value="meus" aria-pressed="'+(posvendasFiltro==='meus')+'">Meus atendimentos</button>'+
+        '<button data-switch="posvendas-filtro" data-value="todos" aria-pressed="'+(posvendasFiltro==='todos')+'">Toda a equipe</button>'+
+      '</div></div>';
+  }
+
+  function posvendasVisible(){
+    if(perfil.papel!=='posvendas') return STATE.posvendas;
+    return STATE.posvendas.filter(function(p){ return posvendasFiltro==='todos' || p.responsavel===perfil.nome; });
+  }
+
+  function renderContent(){
+    var tab = lastTabByRole[perfil.papel];
+    var area = document.getElementById('contentArea');
+    var html = '';
+    switch(tab){
+      case 'leads': html = viewKanbanLeads(); break;
+      case 'clientes': html = viewClientesFechados(); break;
+      case 'perfil': html = viewPerfilVendedor(); break;
+      case 'inclusao': html = viewKanbanInclusao(); break;
+      case 'financeiro': html = viewKanbanFinanceiro(); break;
+      case 'tarefas': html = viewKanbanTarefas(); break;
+      case 'visao-adm': html = viewVisaoAdm(); break;
+      case 'solicitacoes': html = viewKanbanPosvendas(); break;
+      case 'documentos': html = viewDocumentos(); break;
+      case 'empresas': html = viewEmpresas(); break;
+      case 'minhas-rh': case 'minhas-cli': html = viewMinhasSolic(); break;
+      case 'nova-rh': html = viewNovaSolic('rh'); break;
+      case 'nova-cli': html = viewNovaSolic('cliente'); break;
+      case 'desempenho-rh': html = viewDesempenhoRH(); break;
+      case 'pendencias-rh': case 'pendencias-cli': html = viewPendencias(); break;
+      case 'visao-geral': html = viewVisaoGeralGestao(); break;
+      case 'departamentos': html = viewDepartamentosGestao(); break;
+      case 'alertas': html = viewAlertasGestao(); break;
+      default: html = '<div class="content-pad">Em construção.</div>';
+    }
+    area.innerHTML = filterSwitcherHtml() + html;
+    bindDynamicHandlers();
+  }
+
+  function renderAll(){
+    renderAppBar();
+    renderBottomTabbar();
+    renderContent();
+  }
+
+  function bindDynamicHandlers(){
+    document.querySelectorAll('[data-open]').forEach(function(el){
+      el.addEventListener('click', function(){
+        var parts = el.dataset.open.split(':');
+        openDetail(parts[0], parts[1]);
+      });
+    });
+    document.querySelectorAll('[data-dept]').forEach(function(el){
+      el.addEventListener('click', function(){ currentDept = el.dataset.dept; renderContent(); });
+    });
+    document.querySelectorAll('[data-switch]').forEach(function(el){
+      el.addEventListener('click', function(){
+        if(el.dataset.switch==='posvendas-filtro'){ posvendasFiltro = el.dataset.value; renderContent(); }
+      });
+    });
+    var form = document.getElementById('novaSolicForm');
+    if(form) form.addEventListener('submit', handleNovaSolicSubmit);
+    var fileInput = document.getElementById('novaSolicFile');
+    if(fileInput) fileInput.addEventListener('change', function(){
+      var chip = document.getElementById('attachChip');
+      if(fileInput.files && fileInput.files[0]){ chip.style.display='inline-flex'; chip.querySelector('span').textContent = fileInput.files[0].name; }
+    });
+  }
+
+  window.__panaceaGoDept = function(dept){
+    currentDept = dept;
+    lastTabByRole['gestao'] = 'departamentos';
+    renderAppBar(); renderBottomTabbar(); renderContent();
+  };
+
+  /* ============== DADOS REAIS (Supabase) ============== */
+  function fetchHistoricoFor(tipo, ids){
+    if(!ids.length) return Promise.resolve({});
+    return sb.from('historico').select('*').eq('entidade_tipo', tipo).in('entidade_id', ids).order('created_at', {ascending:true}).then(function(res){
+      var out = {};
+      if(res.error) return out;
+      (res.data||[]).forEach(function(h){
+        if(!out[h.entidade_id]) out[h.entidade_id] = [];
+        out[h.entidade_id].push({ d: fmtDateBR(h.created_at), t: h.texto });
+      });
+      return out;
+    });
+  }
+
+  function fetchAnexosFor(solicitacaoIds){
+    if(!solicitacaoIds.length) return Promise.resolve({});
+    return sb.from('anexos').select('*').in('solicitacao_id', solicitacaoIds).order('expira_em', {ascending:true}).then(function(res){
+      var out = {};
+      if(res.error) return out;
+      (res.data||[]).forEach(function(a){
+        if(!out[a.solicitacao_id]) out[a.solicitacao_id] = [];
+        out[a.solicitacao_id].push({ nome:a.nome_arquivo, expira: daysUntil(a.expira_em), path:a.storage_path });
+      });
+      return out;
+    });
+  }
+
+  function fetchLeads(){
+    return sb.from('leads').select('*, perfis(nome)').order('created_at', {ascending:false}).then(function(res){
+      if(res.error){ showToast('Erro ao carregar leads'); STATE.leads=[]; return; }
+      var rows = res.data||[];
+      return fetchHistoricoFor('lead', rows.map(function(r){return r.id;})).then(function(hist){
+        STATE.leads = rows.map(function(r){
+          return {
+            id:r.id, nome:r.nome_contato, empresa:r.empresa_prospect||'—', tipo:r.tipo_negocio||'—',
+            valor:Number(r.valor_estimado)||0, etapa:r.etapa, dias: daysSince(r.updated_at||r.created_at),
+            vendedor: (r.perfis && r.perfis.nome) || '—', historico: hist[r.id]||[]
+          };
+        });
+      });
+    });
+  }
+
+  function fetchTasks(){
+    return sb.from('tarefas_admin').select('*, empresas(nome), responsavel:perfis(nome)').order('prazo', {ascending:true}).then(function(res){
+      if(res.error){ showToast('Erro ao carregar tarefas'); STATE.tasks=[]; return; }
+      STATE.tasks = (res.data||[]).map(function(r){
+        return {
+          id:r.id, titulo:r.titulo, origem:r.origem, empresa:(r.empresas && r.empresas.nome)||'—', etapa:r.etapa,
+          prazo:fmtDateBR(r.prazo), atrasada:computeAtrasada(r.prazo, r.etapa, 'concluido'),
+          responsavel:(r.responsavel && r.responsavel.nome)||'—'
+        };
+      });
+    });
+  }
+
+  function fetchInclusao(){
+    return sb.from('inclusao_propostas').select('*, empresas(nome), responsavel:perfis(nome)').order('prazo', {ascending:true}).then(function(res){
+      if(res.error){ showToast('Erro ao carregar inclusão'); STATE.inclusaoPropostas=[]; return; }
+      var rows = res.data||[];
+      return fetchHistoricoFor('inclusao', rows.map(function(r){return r.id;})).then(function(hist){
+        STATE.inclusaoPropostas = rows.map(function(r){
+          return {
+            id:r.id, empresa:(r.empresas && r.empresas.nome)||'—', vidas:r.vidas||0, tipo:r.tipo_plano||'—', etapa:r.etapa,
+            prazo:fmtDateBR(r.prazo), atrasada:computeAtrasada(r.prazo, r.etapa, 'vigente'),
+            responsavel:(r.responsavel && r.responsavel.nome)||'—', historico: hist[r.id]||[]
+          };
+        });
+      });
+    });
+  }
+
+  function fetchFinanceiro(){
+    return sb.from('financeiro').select('*, empresas(nome), responsavel:perfis(nome)').order('vencimento', {ascending:true}).then(function(res){
+      if(res.error){ showToast('Erro ao carregar financeiro'); STATE.financeiro=[]; return; }
+      var rows = res.data||[];
+      return fetchHistoricoFor('financeiro', rows.map(function(r){return r.id;})).then(function(hist){
+        STATE.financeiro = rows.map(function(r){
+          return {
+            id:r.id, empresa:(r.empresas && r.empresas.nome)||'—', tipo:r.tipo, valor:Number(r.valor)||0,
+            vencimento:fmtDateBR(r.vencimento),
+            etapa:r.etapa,
+            atrasada: r.etapa!=='pago' && r.etapa!=='inadimplente' ? computeAtrasada(r.vencimento, r.etapa, ['pago']) : (r.etapa==='inadimplente'),
+            responsavel:(r.responsavel && r.responsavel.nome)||'—', historico: hist[r.id]||[]
+          };
+        });
+      });
+    });
+  }
+
+  function fetchPosvendas(internal){
+    var query = internal
+      ? sb.from('solicitacoes').select('*, empresas(nome), solicitante:perfis!solicitacoes_solicitante_id_fkey(nome), responsavel:perfis!solicitacoes_responsavel_id_fkey(nome)').order('data_abertura', {ascending:false})
+      : sb.from('solicitacoes_status_simplificado').select('*').order('data_abertura', {ascending:false});
+    return query.then(function(res){
+      if(res.error){ showToast('Erro ao carregar solicitações'); STATE.posvendas=[]; return; }
+      var rows;
+      if(internal){
+        rows = (res.data||[]).map(function(r){
+          return {
+            id:r.id, tipo:r.tipo, origemTipo:r.origem_tipo,
+            empresaOuCliente: (r.empresas && r.empresas.nome) || (r.solicitante && r.solicitante.nome) || '—',
+            solicitante: (r.solicitante && r.solicitante.nome) || '—',
+            responsavel: (r.responsavel && r.responsavel.nome) || '',
+            etapaInterna: r.etapa_interna, dataAbertura: fmtDateBR(r.data_abertura),
+            pendenciaDoc: r.pendencia_doc, pendenciaDescricao: r.pendencia_descricao||'',
+            anexos: [], historico: [], _responsavelId: r.responsavel_id
+          };
+        });
+      } else {
+        rows = (res.data||[]).map(function(r){
+          return {
+            id:r.id, tipo:r.tipo, origemTipo:r.origem_tipo,
+            empresaOuCliente: r.empresa_nome || perfil.nome,
+            solicitante: r.solicitante_nome || perfil.nome,
+            responsavel:'', etapaInterna: r.status, dataAbertura: fmtDateBR(r.data_abertura),
+            pendenciaDoc: r.pendencia_doc, pendenciaDescricao: r.pendencia_descricao||'',
+            anexos: [], historico: []
+          };
+        });
+      }
+      var ids = rows.map(function(r){return r.id;});
+      return Promise.all([ fetchHistoricoFor('solicitacao', ids), fetchAnexosFor(ids) ]).then(function(both){
+        var hist = both[0], anx = both[1];
+        rows.forEach(function(r){ r.historico = hist[r.id]||[]; r.anexos = anx[r.id]||[]; });
+        STATE.posvendas = rows;
+      });
+    });
+  }
+
+  function refreshData(){
+    var p = perfil.papel;
+    if(p==='vendedor') return fetchLeads();
+    if(p==='administrativo') return Promise.all([fetchTasks(), fetchInclusao(), fetchFinanceiro()]);
+    if(p==='posvendas') return fetchPosvendas(true);
+    if(p==='rh' || p==='cliente') return fetchPosvendas(false);
+    if(p==='gestao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchPosvendas(true)]);
+    return Promise.resolve();
+  }
+
+  /* ============== VIEW: Vendedor ============== */
+  function viewKanbanLeads(){
+    var cols = LEAD_STAGES.map(function(stage){
+      var items = STATE.leads.filter(function(l){return l.etapa===stage.key;});
+      return '<div class="column"><div class="column-head"><span class="name">'+stage.label+'</span><span class="column-count">'+items.length+'</span></div>'+
+        '<div class="column-body">'+(items.length ? items.map(function(l){
+          return '<button class="card" data-open="lead:'+l.id+'"><div class="name">'+l.nome+'</div>'+
+            '<div class="meta">'+l.empresa+' · '+l.tipo+'</div>'+
+            '<div class="foot"><span class="money">'+fmtMoney(l.valor)+'</span>'+slaChip(l.dias)+'</div></button>';
+        }).join('') : '<div class="empty-col">Nada aqui</div>')+'</div></div>';
+    }).join('');
+    return '<div class="kanban">'+cols+'</div>';
+  }
+
+  function viewClientesFechados(){
+    var items = STATE.leads.filter(function(l){return l.etapa==='fechado';});
+    return '<div class="content-pad"><div class="section-label">Vendas fechadas</div><div class="list">'+
+      (items.map(function(l){
+        return '<button class="row-card" data-open="lead:'+l.id+'"><div class="row-top"><div><div class="row-title">'+l.nome+'</div><div class="row-sub">'+l.empresa+' · '+l.tipo+'</div></div><span class="chip chip-ok">'+ic('check')+' Fechado</span></div></button>';
+      }).join('') || '<div class="empty-col">Nenhuma venda fechada ainda.</div>')+'</div></div>';
+  }
+
+  function viewPerfilVendedor(){
+    var ativos = STATE.leads.filter(function(l){return ['fechado','perdido'].indexOf(l.etapa)===-1;});
+    var fechados = STATE.leads.filter(function(l){return l.etapa==='fechado';});
+    var pipeline = ativos.reduce(function(s,l){return s+l.valor;},0);
+    return '<div class="content-pad">'+
+      '<div class="section-label">Seu desempenho</div>'+
+      '<div class="stat-grid">'+
+        '<div class="stat-tile"><div class="n">'+ativos.length+'</div><div class="l">Leads ativos</div></div>'+
+        '<div class="stat-tile"><div class="n">'+fechados.length+'</div><div class="l">Fechados</div></div>'+
+        '<div class="stat-tile"><div class="n mono">'+fmtMoney(pipeline)+'</div><div class="l">Em pipeline</div></div>'+
+      '</div>'+
+      '<div class="section-label">Perfil</div>'+
+      '<div class="row-card" style="cursor:default"><div class="row-title">'+perfil.nome+'</div>'+
+      '<div class="row-sub">Consultor comercial · Panacea Seguros</div>'+
+      '<div class="row-sub">'+(perfil.email||'')+'</div></div></div>';
+  }
+
+  /* ============== VIEW: Administrativo ============== */
+  function viewKanbanTarefas(){
+    var cols = TASK_STAGES.map(function(stage){
+      var items = STATE.tasks.filter(function(t){return t.etapa===stage.key;});
+      return '<div class="column"><div class="column-head"><span class="name">'+stage.label+'</span><span class="column-count">'+items.length+'</span></div>'+
+        '<div class="column-body">'+(items.length ? items.map(function(t){
+          return '<button class="card" data-open="task:'+t.id+'"><div class="name">'+t.titulo+'</div><div class="meta">'+t.empresa+'</div>'+
+            '<div class="foot"><span class="chip '+(t.origem==='cliente'?'chip-gold':'chip-neutral')+'">'+(t.origem==='cliente'?'Solicitação de cliente':'Interna')+'</span>'+
+            '<span class="chip '+(t.atrasada?'chip-crit':'chip-ok')+'">'+ic('clock')+' '+t.prazo+'</span></div></button>';
+        }).join('') : '<div class="empty-col">Nada aqui</div>')+'</div></div>';
+    }).join('');
+    return '<div class="kanban">'+cols+'</div>';
+  }
+
+  function viewVisaoAdm(){
+    var atrasadasTarefas = STATE.tasks.filter(function(t){return t.atrasada;}).length;
+    var atrasadasIncl = STATE.inclusaoPropostas.filter(function(t){return t.atrasada;}).length;
+    var totalAtrasadas = atrasadasTarefas + atrasadasIncl;
+    var inadimplentes = STATE.financeiro.filter(function(t){return t.etapa==='inadimplente';}).length;
+    var vigentes = STATE.inclusaoPropostas.filter(function(t){return t.etapa==='vigente';}).length;
+    var alertItems = [].concat(
+      STATE.tasks.filter(function(t){return t.atrasada;}).map(function(t){return {icon:'alert',tone:'crit',text:'<b>'+t.titulo+'</b> — prazo era '+t.prazo+'.'};}),
+      STATE.inclusaoPropostas.filter(function(t){return t.atrasada;}).map(function(t){return {icon:'alert',tone:'crit',text:'Implantação de <b>'+t.empresa+'</b> atrasada (prazo '+t.prazo+').'};}),
+      STATE.financeiro.filter(function(t){return t.etapa==='inadimplente';}).map(function(t){return {icon:'alert',tone:'crit',text:'<b>'+t.empresa+'</b> inadimplente — venceu em '+t.vencimento+'.'};})
+    );
+    return '<div class="content-pad">'+
+      '<div class="section-label">Panorama do administrativo</div>'+
+      '<div class="stat-grid">'+
+        '<div class="stat-tile"><div class="n" style="color:'+(totalAtrasadas?'var(--critical)':'inherit')+'">'+totalAtrasadas+'</div><div class="l">Itens atrasados</div></div>'+
+        '<div class="stat-tile"><div class="n" style="color:'+(inadimplentes?'var(--critical)':'inherit')+'">'+inadimplentes+'</div><div class="l">Empresas inadimplentes</div></div>'+
+        '<div class="stat-tile"><div class="n">'+vigentes+'</div><div class="l">Propostas com vigência ativa</div></div>'+
+        '<div class="stat-tile"><div class="n">'+STATE.inclusaoPropostas.length+'</div><div class="l">Propostas em implantação</div></div>'+
+      '</div>'+
+      '<div class="section-label">Alertas</div>'+
+      '<div class="row-card" style="cursor:default">'+(alertItems.length ? alertItems.map(alertRow).join('') : 'Nenhum atraso agora.')+'</div>'+
+    '</div>';
+  }
+
+  function viewKanbanInclusao(){
+    var cols = INCL_STAGES.map(function(stage){
+      var items = STATE.inclusaoPropostas.filter(function(t){return t.etapa===stage.key;});
+      return '<div class="column"><div class="column-head"><span class="name">'+stage.label+'</span><span class="column-count">'+items.length+'</span></div>'+
+        '<div class="column-body">'+(items.length ? items.map(function(t){
+          return '<button class="card" data-open="incl:'+t.id+'"><div class="name">'+t.empresa+'</div><div class="meta">'+t.tipo+' · '+t.vidas+' vidas</div>'+
+            '<div class="foot"><span class="chip chip-neutral">'+t.responsavel.split(' ')[0]+'</span>'+
+            '<span class="chip '+(t.atrasada?'chip-crit':'chip-ok')+'">'+ic('clock')+' '+t.prazo+'</span></div></button>';
+        }).join('') : '<div class="empty-col">Nada aqui</div>')+'</div></div>';
+    }).join('');
+    return '<div class="kanban">'+cols+'</div>';
+  }
+
+  function viewKanbanFinanceiro(){
+    var cols = FIN_STAGES.map(function(stage){
+      var items = STATE.financeiro.filter(function(t){return t.etapa===stage.key;});
+      return '<div class="column"><div class="column-head"><span class="name">'+stage.label+'</span><span class="column-count">'+items.length+'</span></div>'+
+        '<div class="column-body">'+(items.length ? items.map(function(t){
+          return '<button class="card" data-open="fin:'+t.id+'"><div class="name">'+t.empresa+'</div><div class="meta">'+t.tipo+'</div>'+
+            '<div class="foot"><span class="money">'+fmtMoney(t.valor)+'</span><span class="chip '+(t.atrasada?'chip-crit':'chip-ok')+'">'+ic('clock')+' '+t.vencimento+'</span></div></button>';
+        }).join('') : '<div class="empty-col">Nada aqui</div>')+'</div></div>';
+    }).join('');
+    return '<div class="kanban">'+cols+'</div>';
+  }
+
+  /* ============== VIEW: Pós-vendas ============== */
+  function viewKanbanPosvendas(){
+    var fonte = posvendasVisible();
+    var cols = PV_STAGES.map(function(stage){
+      var items = fonte.filter(function(p){return p.etapaInterna===stage.key;});
+      return '<div class="column"><div class="column-head"><span class="name">'+stage.label+'</span><span class="column-count">'+items.length+'</span></div>'+
+        '<div class="column-body">'+(items.length ? items.map(function(p){
+          var respChip = (perfil.papel==='posvendas' && posvendasFiltro==='todos')
+            ? (p.responsavel ? '<span class="chip chip-neutral">'+initials(p.responsavel)+'</span>' : '<span class="chip chip-warn">Sem responsável</span>')
+            : '';
+          return '<button class="card" data-open="pv:'+p.id+'"><div class="name">'+p.tipo+'</div><div class="meta">'+p.empresaOuCliente+'</div>'+
+            '<div class="foot"><span class="chip '+(p.origemTipo==='rh'?'chip-info':'chip-gold')+'">'+(p.origemTipo==='rh'?'RH':'Cliente PF')+'</span>'+
+            (p.pendenciaDoc ? '<span class="chip chip-crit">'+ic('alert')+' pendência</span>' : (p.anexos.length ? '<span class="chip chip-neutral">'+ic('paperclip')+' '+p.anexos.length+'</span>' : ''))+
+            respChip+'</div></button>';
+        }).join('') : '<div class="empty-col">Nada aqui</div>')+'</div></div>';
+    }).join('');
+    return '<div class="kanban">'+cols+'</div>';
+  }
+
+  function viewDocumentos(){
+    var all = [];
+    posvendasVisible().forEach(function(p){ (p.anexos||[]).forEach(function(a){ all.push(Object.assign({}, a, {dono:p.empresaOuCliente, pv:p.id})); }); });
+    all.sort(function(a,b){return a.expira-b.expira;});
+    return '<div class="content-pad">'+
+      '<div class="section-label">Documentos anexados — expiram sozinhos</div>'+
+      '<p class="row-sub" style="margin-bottom:.7rem">Cada anexo some automaticamente depois de um tempo. Baixe antes se precisar guardar.</p>'+
+      '<div class="list">'+(all.map(function(a){
+        return '<button class="row-card" data-open="pv:'+a.pv+'"><div class="row-top"><div><div class="row-title">'+ic('doc')+' '+a.nome+'</div><div class="row-sub">'+a.dono+'</div></div>'+expiraChip(a.expira)+'</div></button>';
+      }).join('') || '<div class="empty-col">Nenhum documento anexado no momento.</div>')+'</div></div>';
+  }
+
+  function viewEmpresas(){
+    var fonte = posvendasVisible();
+    var seen = {};
+    var empresasRh = [];
+    fonte.filter(function(p){return p.origemTipo==='rh';}).forEach(function(p){ if(!seen[p.empresaOuCliente]){ seen[p.empresaOuCliente]=true; empresasRh.push(p.empresaOuCliente); } });
+    return '<div class="content-pad"><div class="section-label">Empresas clientes (RH)</div><div class="list">'+
+      empresasRh.map(function(emp){
+        var items = fonte.filter(function(p){return p.empresaOuCliente===emp;});
+        var abertas = items.filter(function(p){return p.etapaInterna!=='concluido';}).length;
+        var pend = items.filter(function(p){return p.pendenciaDoc;}).length;
+        return '<div class="row-card" style="cursor:default"><div class="row-top"><div><div class="row-title">'+ic('building')+' '+emp+'</div><div class="row-sub">'+items.length+' solicitação(ões) no total</div></div>'+
+          '<span class="chip '+(abertas?'chip-warn':'chip-ok')+'">'+abertas+' aberta(s)</span></div>'+
+          (pend ? '<div class="pending-banner">'+ic('alert')+'<span>'+pend+' pendência(s) de documento em aberto</span></div>' : '')+'</div>';
+      }).join('')+'</div></div>';
+  }
+
+  /* ============== VIEW: RH / Cliente ============== */
+  function viewMinhasSolic(){
+    var items = STATE.posvendas;
+    return '<div class="content-pad">'+
+      '<div class="section-label">'+(perfil.papel==='rh' ? 'Pedidos abertos pela '+(perfil.empresaNome||'') : 'Seus pedidos')+'</div>'+
+      '<p class="row-sub" style="margin-bottom:.7rem">Você acompanha se foi feito ou não — o passo a passo interno fica só com o pós-vendas.</p>'+
+      '<div class="list">'+(items.map(function(p){
+        var st = pvClienteStatus(p);
+        return '<button class="row-card" data-open="pv-ext:'+p.id+'"><div class="row-top"><div><div class="row-title">'+p.tipo+'</div><div class="row-sub">Aberto em '+p.dataAbertura+' · '+shortCode(p.id)+'</div></div>'+
+          '<span class="chip '+st.cls+'">'+ic(st.ic)+' '+st.label+'</span></div>'+
+          (p.pendenciaDoc ? '<div class="pending-banner">'+ic('alert')+'<span>Documento pendente — veja em "Pendências"</span></div>' : '')+'</button>';
+      }).join('') || '<div class="empty-col">Nenhuma solicitação ainda.</div>')+'</div></div>';
+  }
+
+  function viewPendencias(){
+    var items = STATE.posvendas.filter(function(p){return p.pendenciaDoc;});
+    return '<div class="content-pad"><div class="section-label">Documentos pendentes</div><div class="list">'+
+      (items.map(function(p){
+        return '<div class="row-card" style="cursor:default"><div class="row-title">'+p.tipo+'</div><div class="row-sub">'+shortCode(p.id)+' · aberto em '+p.dataAbertura+'</div>'+
+          '<div class="pending-banner">'+ic('alert')+'<span>'+p.pendenciaDescricao+'</span></div>'+
+          '<button class="btn btn-gold" style="margin-top:.6rem" data-open="pv-ext:'+p.id+'">'+ic('upload')+' Resolver pendência</button></div>';
+      }).join('') || '<div class="empty-col">Nenhuma pendência de documento — tudo certo por aqui.</div>')+'</div></div>';
+  }
+
+  function viewNovaSolic(origemTipo){
+    var tiposRh = ['Inclusão de beneficiário','Exclusão de beneficiário','Emissão de relatório','Segunda via de documento'];
+    var tiposCli = ['Dúvida sobre cobertura','Alteração cadastral','Segunda via de documento','Abertura de sinistro'];
+    var tipos = origemTipo==='rh' ? tiposRh : tiposCli;
+    return '<div class="content-pad">'+
+      '<div class="section-label">'+(origemTipo==='rh' ? 'Abrir novo pedido ao pós-vendas' : 'Abrir novo pedido')+'</div>'+
+      '<form id="novaSolicForm">'+
+        '<div class="field"><label>Tipo de solicitação</label><select name="tipo">'+tipos.map(function(t){return '<option>'+t+'</option>';}).join('')+'</select></div>'+
+        '<div class="field"><label>Observações</label><textarea name="obs" rows="3" placeholder="Descreva o que precisa..."></textarea></div>'+
+        '<div class="field"><label>Anexo (opcional)</label>'+
+          '<label class="attach-mock" for="novaSolicFile">'+ic('upload')+'<span id="attachLabel">Toque para anexar um arquivo</span></label>'+
+          '<input type="file" id="novaSolicFile" hidden />'+
+          '<span class="attach-chip" id="attachChip" style="display:none">'+ic('paperclip')+'<span></span></span>'+
+        '</div>'+
+        '<button type="submit" class="btn btn-primary">'+ic('plus')+' Enviar solicitação</button>'+
+      '</form></div>';
+  }
+
+  function handleNovaSolicSubmit(e){
+    e.preventDefault();
+    var form = e.target;
+    var tipo = form.tipo.value;
+    var obs = form.obs.value.trim();
+    var fileInput = document.getElementById('novaSolicFile');
+    var file = fileInput && fileInput.files && fileInput.files[0];
+    var origemTipo = perfil.papel === 'rh' ? 'rh' : 'cliente';
+    var btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    var payload = {
+      tipo: tipo, origem_tipo: origemTipo,
+      empresa_id: origemTipo==='rh' ? perfil.empresaId : null,
+      solicitante_id: perfil.id, etapa_interna: 'recebido'
+    };
+    sb.from('solicitacoes').insert(payload).select().single().then(function(res){
+      if(res.error){ btn.disabled=false; showToast('Não deu pra enviar — tente de novo'); return; }
+      var row = res.data;
+      var texto = obs ? ('Solicitação enviada pelo app. Observação: '+obs) : 'Solicitação enviada pelo app.';
+      var afterHist = sb.from('historico').insert({ entidade_tipo:'solicitacao', entidade_id: row.id, texto: texto, created_by: perfil.id });
+      var afterUpload = file
+        ? sb.storage.from('documentos').upload('solicitacao_'+row.id+'/'+Date.now()+'_'+file.name, file).then(function(upRes){
+            if(upRes.error) return;
+            return sb.from('anexos').insert({ solicitacao_id: row.id, nome_arquivo: file.name, storage_path: upRes.data.path, tamanho_bytes: file.size, enviado_por: perfil.id });
+          })
+        : Promise.resolve();
+      Promise.all([afterHist, afterUpload]).then(function(){
+        showToast('Solicitação enviada');
+        lastTabByRole[perfil.papel] = origemTipo==='rh' ? 'minhas-rh' : 'minhas-cli';
+        refreshData().then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); btn.disabled=false; });
+      });
+    });
+  }
+
+  function viewDesempenhoRH(){
+    return '<div class="content-pad"><div class="section-label">Desempenho — '+(perfil.empresaNome||'')+'</div>'+
+      '<div class="row-card" style="cursor:default"><div class="row-top"><div><div class="row-title">'+ic('doc')+' Relatório de sinistralidade</div><div class="row-sub">Em construção</div></div><span class="chip chip-warn">Em breve</span></div>'+
+      '<p class="row-sub" style="margin-top:.5rem">Esse relatório está sendo desenhado com calma, comparando a Panacea com o mercado, antes de entrar aqui pra valer.</p></div></div>';
+  }
+
+  /* ============== VIEW: Gestão ============== */
+  function viewVisaoGeralGestao(){
+    var ativos = STATE.leads.filter(function(l){return ['fechado','perdido'].indexOf(l.etapa)===-1;});
+    var pipeline = ativos.reduce(function(s,l){return s+l.valor;},0);
+    var atrasadas = STATE.tasks.filter(function(t){return t.atrasada;}).length + STATE.inclusaoPropostas.filter(function(t){return t.atrasada;}).length;
+    var inadimplentes = STATE.financeiro.filter(function(t){return t.etapa==='inadimplente';}).length;
+    var pvAbertas = STATE.posvendas.filter(function(p){return p.etapaInterna!=='concluido';}).length;
+    var expirando = STATE.posvendas.reduce(function(s,p){return s + (p.anexos||[]).filter(function(a){return a.expira<=3;}).length;},0);
+    var pendencias = STATE.posvendas.filter(function(p){return p.pendenciaDoc;}).length;
+    return '<div class="content-pad">'+
+      '<div class="section-label">Panacea em um relance</div>'+
+      '<div class="stat-grid">'+
+        '<div class="stat-tile"><div class="n">'+ativos.length+'</div><div class="l">Leads ativos · '+fmtMoney(pipeline)+' em pipeline</div></div>'+
+        '<div class="stat-tile"><div class="n" style="color:'+(atrasadas?'var(--critical)':'inherit')+'">'+atrasadas+'</div><div class="l">Itens atrasados no administrativo</div></div>'+
+        '<div class="stat-tile"><div class="n">'+pvAbertas+'</div><div class="l">Solicitações abertas no pós-vendas</div></div>'+
+        '<div class="stat-tile"><div class="n" style="color:'+((pendencias+inadimplentes)?'var(--critical)':'inherit')+'">'+(pendencias+inadimplentes)+'</div><div class="l">Pendências de doc. + inadimplência</div></div>'+
+      '</div>'+
+      (expirando ? '<div class="pending-banner">'+ic('doc')+'<span>'+expirando+' documento(s) expirando em até 3 dias.</span></div>' : '')+
+      '<div class="section-label" style="margin-top:1.1rem">Ir direto a um departamento</div>'+
+      deptButton('leads','Vendas','chart', ativos.length+' leads ativos')+
+      deptButton('inclusao','Administrativo','list', atrasadas+' itens atrasados')+
+      deptButton('posvendas','Pós-vendas','folder', pvAbertas+' solicitações abertas')+
+    '</div>';
+  }
+
+  function deptButton(dept,label,icon,sub){
+    return '<button class="dept-btn" onclick="window.__panaceaGoDept(\''+dept+'\')"><div class="ic">'+ic(icon)+'</div>'+
+      '<div><div class="tt">'+label+'</div><div class="ss">'+sub+'</div></div><div class="arrow">'+ic('chev')+'</div></button>';
+  }
+
+  function viewDepartamentosGestao(){
+    var deptTabs = [{k:'leads',l:'Vendas'},{k:'inclusao',l:'Inclusão'},{k:'financeiro',l:'Financeiro'},{k:'tarefas',l:'Tarefas adm.'},{k:'posvendas',l:'Pós-vendas'}];
+    var chips = deptTabs.map(function(d){ return '<button class="chip '+(currentDept===d.k?'chip-gold':'chip-neutral')+'" style="border:none;cursor:pointer" data-dept="'+d.k+'">'+d.l+'</button>'; }).join(' ');
+    var board = '';
+    if(currentDept==='leads') board = viewKanbanLeads();
+    if(currentDept==='inclusao') board = viewKanbanInclusao();
+    if(currentDept==='financeiro') board = viewKanbanFinanceiro();
+    if(currentDept==='tarefas') board = viewKanbanTarefas();
+    if(currentDept==='posvendas') board = viewKanbanPosvendas();
+    return '<div style="padding:14px 16px 0"><div class="section-label" style="margin-bottom:.5rem">Departamento</div><div style="display:flex;gap:.4rem;margin-bottom:.3rem;flex-wrap:wrap">'+chips+'</div></div>'+board;
+  }
+
+  function viewAlertasGestao(){
+    var alerts = computeAlerts();
+    return '<div class="content-pad"><div class="section-label">O que pede atenção agora</div><div class="row-card" style="cursor:default">'+
+      (alerts.length ? alerts.map(alertRow).join('') : 'Nada pedindo atenção no momento — tudo dentro do esperado.')+'</div></div>';
+  }
+
+  /* ============== FICHAS DE DETALHE ============== */
+  function openDetail(type, id){
+    if(type==='lead') return openLeadDetail(id);
+    if(type==='task') return openTaskDetail(id);
+    if(type==='incl') return openInclDetail(id);
+    if(type==='fin') return openFinDetail(id);
+    if(type==='pv') return openPvDetail(id, true);
+    if(type==='pv-ext') return openPvDetail(id, false);
+  }
+
+  function timelineHtml(hist){
+    return '<div class="timeline">'+hist.slice().reverse().map(function(h){
+      return '<div class="tl-item"><div class="tl-dot"></div><div class="tl-tx"><div class="d">'+h.d+'</div>'+h.t+'</div></div>';
+    }).join('')+'</div>';
+  }
+
+  function openLeadDetail(id){
+    var l = STATE.leads.find(function(x){return x.id===id;});
+    if(!l) return;
+    var nextStage = {novo:'contato', contato:'proposta', proposta:'negociacao', negociacao:'fechado'}[l.etapa];
+    var stageLabel = function(k){ return LEAD_STAGES.find(function(s){return s.key===k;}).label; };
+    var html = '<h3>'+l.nome+'</h3><p class="row-sub" style="margin-bottom:.7rem">'+l.empresa+' · '+l.tipo+'</p>'+
+      '<div class="kv"><span class="k">Etapa atual</span><span class="v">'+stageLabel(l.etapa)+'</span></div>'+
+      '<div class="kv"><span class="k">Valor estimado</span><span class="v mono">'+fmtMoney(l.valor)+'</span></div>'+
+      '<div class="kv"><span class="k">Responsável</span><span class="v">'+l.vendedor+'</span></div>'+
+      '<div class="section-label" style="margin-top:1rem">Histórico</div>'+timelineHtml(l.historico);
+    if(perfil.papel==='vendedor' && nextStage){
+      html += '<div class="btn-row"><button class="btn btn-primary" data-action="lead-advance" data-id="'+id+'" data-to="'+nextStage+'">'+ic('chev')+' Mover para "'+stageLabel(nextStage)+'"</button>'+
+        '<button class="btn btn-danger" data-action="lead-lost" data-id="'+id+'">'+ic('x')+' Marcar como perdido</button></div>';
+    } else if(perfil.papel==='vendedor'){
+      html += '<div class="btn-row"><button class="btn btn-ghost" disabled>Negociação encerrada</button></div>';
+    }
+    openSheet(html);
+    bindSheetActions();
+  }
+
+  function openTaskDetail(id){
+    var t = STATE.tasks.find(function(x){return x.id===id;});
+    if(!t) return;
+    var stageLabel = function(k){ return TASK_STAGES.find(function(s){return s.key===k;}).label; };
+    var nextStage = {afazer:'andamento', andamento:'aguardando', aguardando:'concluido'}[t.etapa];
+    var html = '<h3>'+t.titulo+'</h3><p class="row-sub" style="margin-bottom:.7rem">'+t.empresa+'</p>'+
+      '<div class="kv"><span class="k">Origem</span><span class="v">'+(t.origem==='cliente'?'Solicitação de cliente':'Interna')+'</span></div>'+
+      '<div class="kv"><span class="k">Etapa</span><span class="v">'+stageLabel(t.etapa)+'</span></div>'+
+      '<div class="kv"><span class="k">Prazo</span><span class="v">'+t.prazo+(t.atrasada?' (atrasada)':'')+'</span></div>'+
+      '<div class="kv"><span class="k">Responsável</span><span class="v">'+t.responsavel+'</span></div>';
+    if(perfil.papel==='administrativo' && nextStage){
+      html += '<div class="btn-row"><button class="btn btn-primary" data-action="task-advance" data-id="'+id+'" data-to="'+nextStage+'">'+ic('chev')+' Mover para "'+stageLabel(nextStage)+'"</button></div>';
+    }
+    openSheet(html);
+    bindSheetActions();
+  }
+
+  function openInclDetail(id){
+    var t = STATE.inclusaoPropostas.find(function(x){return x.id===id;});
+    if(!t) return;
+    var stageLabel = function(k){ return INCL_STAGES.find(function(s){return s.key===k;}).label; };
+    var nextStage = {recebido:'conferencia', conferencia:'enviado', enviado:'vigente'}[t.etapa];
+    var html = '<h3>'+t.empresa+'</h3><p class="row-sub" style="margin-bottom:.7rem">'+t.tipo+' · '+t.vidas+' vidas</p>'+
+      '<div class="kv"><span class="k">Etapa</span><span class="v">'+stageLabel(t.etapa)+'</span></div>'+
+      '<div class="kv"><span class="k">Prazo</span><span class="v">'+t.prazo+(t.atrasada?' (atrasada)':'')+'</span></div>'+
+      '<div class="kv"><span class="k">Responsável</span><span class="v">'+t.responsavel+'</span></div>'+
+      '<div class="section-label" style="margin-top:1rem">Histórico</div>'+timelineHtml(t.historico);
+    if(perfil.papel==='administrativo' && nextStage){
+      html += '<div class="btn-row"><button class="btn btn-primary" data-action="incl-advance" data-id="'+id+'" data-to="'+nextStage+'">'+ic('chev')+' Mover para "'+stageLabel(nextStage)+'"</button></div>';
+    }
+    openSheet(html);
+    bindSheetActions();
+  }
+
+  function openFinDetail(id){
+    var t = STATE.financeiro.find(function(x){return x.id===id;});
+    if(!t) return;
+    var stageLabel = function(k){ return FIN_STAGES.find(function(s){return s.key===k;}).label; };
+    var nextStage = {faturar:'aguardando', aguardando:'pago'}[t.etapa];
+    var html = '<h3>'+t.empresa+'</h3><p class="row-sub" style="margin-bottom:.7rem">'+t.tipo+'</p>'+
+      '<div class="kv"><span class="k">Etapa</span><span class="v">'+stageLabel(t.etapa)+'</span></div>'+
+      '<div class="kv"><span class="k">Valor</span><span class="v mono">'+fmtMoney(t.valor)+'</span></div>'+
+      '<div class="kv"><span class="k">Vencimento</span><span class="v">'+t.vencimento+(t.atrasada?' (atrasado)':'')+'</span></div>'+
+      '<div class="kv"><span class="k">Responsável</span><span class="v">'+t.responsavel+'</span></div>'+
+      '<div class="section-label" style="margin-top:1rem">Histórico</div>'+timelineHtml(t.historico);
+    if(perfil.papel==='administrativo'){
+      html += '<div class="btn-row">';
+      if(nextStage) html += '<button class="btn btn-primary" data-action="fin-advance" data-id="'+id+'" data-to="'+nextStage+'">'+ic('chev')+' Mover para "'+stageLabel(nextStage)+'"</button>';
+      if(t.etapa==='inadimplente') html += '<button class="btn btn-ghost" data-action="fin-advance" data-id="'+id+'" data-to="pago">'+ic('check')+' Marcar como pago</button>';
+      html += '</div>';
+    }
+    openSheet(html);
+    bindSheetActions();
+  }
+
+  function openPvDetail(id, internal){
+    var p = STATE.posvendas.find(function(x){return x.id===id;});
+    if(!p) return;
+    var stageLabel = function(k){ return PV_STAGES.find(function(s){return s.key===k;}).label; };
+    var nextStage = {recebido:'analise', analise:'processando', processando:'concluido'}[p.etapaInterna];
+    var html = '<h3>'+p.tipo+'</h3><p class="row-sub" style="margin-bottom:.7rem">'+p.empresaOuCliente+' · '+shortCode(p.id)+'</p>';
+    if(internal){
+      html += '<div class="kv"><span class="k">Etapa interna</span><span class="v">'+stageLabel(p.etapaInterna)+'</span></div>';
+    } else {
+      var st = pvClienteStatus(p);
+      html += '<div class="kv"><span class="k">Status</span><span class="v">'+st.label+'</span></div>';
+    }
+    html += '<div class="kv"><span class="k">Solicitante</span><span class="v">'+p.solicitante+'</span></div>'+
+      '<div class="kv"><span class="k">Aberto em</span><span class="v">'+p.dataAbertura+'</span></div>';
+    if(internal){
+      html += '<div class="kv"><span class="k">Atendido por</span><span class="v">'+(p.responsavel||'—')+'</span></div>';
+    }
+    if(p.pendenciaDoc){
+      html += '<div class="pending-banner">'+ic('alert')+'<span>'+p.pendenciaDescricao+'</span></div>';
+      if(!internal) html += '<div class="btn-row"><label class="btn btn-gold" for="resolvePendInput" style="cursor:pointer">'+ic('upload')+' Enviar documento</label><input type="file" id="resolvePendInput" hidden /></div>';
+    }
+    if(p.anexos && p.anexos.length){
+      html += '<div class="section-label" style="margin-top:1rem">Anexos</div>' + p.anexos.map(function(a){
+        return '<div class="kv"><span class="k">'+ic('paperclip')+' '+a.nome+'</span><span class="v" style="display:flex;gap:.4rem;align-items:center">'+expiraChip(a.expira)+
+          '<button type="button" class="chip chip-neutral" style="border:none;cursor:pointer" data-download="'+a.path+'">Baixar</button></span></div>';
+      }).join('');
+    }
+    html += '<div class="section-label" style="margin-top:1rem">Histórico</div>'+timelineHtml(p.historico);
+    if(internal && perfil.papel==='posvendas'){
+      html += '<div class="btn-row">';
+      if(!p._responsavelId) html += '<button class="btn btn-gold" data-action="pv-claim" data-id="'+id+'">'+ic('user')+' Assumir este atendimento</button>';
+      if(nextStage) html += '<button class="btn btn-primary" data-action="pv-advance" data-id="'+id+'" data-to="'+nextStage+'">'+ic('chev')+' Mover para "'+stageLabel(nextStage)+'"</button>';
+      html += p.pendenciaDoc
+        ? '<button class="btn btn-ghost" data-action="pv-clear-pend" data-id="'+id+'">'+ic('check')+' Marcar pendência como resolvida</button>'
+        : '<button class="btn btn-ghost" data-action="pv-set-pend" data-id="'+id+'">'+ic('alert')+' Marcar pendência de documento</button>';
+      html += '</div>';
+    }
+    openSheet(html);
+    bindSheetActions();
+
+    var resolveInput = document.getElementById('resolvePendInput');
+    if(resolveInput){
+      resolveInput.addEventListener('change', function(){
+        var file = resolveInput.files && resolveInput.files[0];
+        if(!file) return;
+        var path = 'solicitacao_'+id+'/'+Date.now()+'_'+file.name;
+        sb.storage.from('documentos').upload(path, file).then(function(upRes){
+          if(upRes.error){ showToast('Não deu pra enviar o documento'); return; }
+          Promise.all([
+            sb.from('anexos').insert({ solicitacao_id:id, nome_arquivo:file.name, storage_path:path, tamanho_bytes:file.size, enviado_por:perfil.id }),
+            sb.from('historico').insert({ entidade_tipo:'solicitacao', entidade_id:id, texto:'Documento reenviado pelo app.', created_by:perfil.id })
+          ]).then(function(){
+            showToast('Documento enviado — aguardando conferência do pós-vendas');
+            closeSheet();
+            refreshData().then(renderContent);
+          });
+        });
+      });
+    }
+  }
+
+  function addHistorico(tipo, id, texto){
+    return sb.from('historico').insert({ entidade_tipo: tipo, entidade_id: id, texto: texto, created_by: perfil.id });
+  }
+
+  function bindSheetActions(){
+    document.querySelectorAll('[data-action]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        btn.disabled = true;
+        var action = btn.dataset.action, id = btn.dataset.id, to = btn.dataset.to;
+        var work;
+        if(action==='lead-advance'){
+          work = sb.from('leads').update({etapa:to, updated_at:new Date().toISOString()}).eq('id', id)
+            .then(function(){ return addHistorico('lead', id, 'Movido para "'+LEAD_STAGES.find(function(s){return s.key===to;}).label+'".'); })
+            .then(function(){ showToast('Lead atualizado'); });
+        } else if(action==='lead-lost'){
+          work = sb.from('leads').update({etapa:'perdido', updated_at:new Date().toISOString()}).eq('id', id)
+            .then(function(){ return addHistorico('lead', id, 'Marcado como perdido.'); })
+            .then(function(){ showToast('Lead marcado como perdido'); });
+        } else if(action==='task-advance'){
+          work = sb.from('tarefas_admin').update({etapa:to}).eq('id', id).then(function(){ showToast('Tarefa atualizada'); });
+        } else if(action==='incl-advance'){
+          work = sb.from('inclusao_propostas').update({etapa:to}).eq('id', id)
+            .then(function(){ return addHistorico('inclusao', id, 'Movido para "'+INCL_STAGES.find(function(s){return s.key===to;}).label+'".'); })
+            .then(function(){ showToast('Proposta atualizada'); });
+        } else if(action==='fin-advance'){
+          work = sb.from('financeiro').update({etapa:to}).eq('id', id)
+            .then(function(){ return addHistorico('financeiro', id, 'Movido para "'+FIN_STAGES.find(function(s){return s.key===to;}).label+'".'); })
+            .then(function(){ showToast('Financeiro atualizado'); });
+        } else if(action==='pv-advance'){
+          work = sb.from('solicitacoes').update({etapa_interna:to, updated_at:new Date().toISOString()}).eq('id', id)
+            .then(function(){ return addHistorico('solicitacao', id, 'Movido para "'+PV_STAGES.find(function(s){return s.key===to;}).label+'".'); })
+            .then(function(){ showToast('Solicitação atualizada'); });
+        } else if(action==='pv-claim'){
+          work = sb.from('solicitacoes').update({responsavel_id: perfil.id}).eq('id', id)
+            .then(function(){ return addHistorico('solicitacao', id, perfil.nome+' assumiu este atendimento.'); })
+            .then(function(){ showToast('Atendimento assumido'); });
+        } else if(action==='pv-set-pend'){
+          work = sb.from('solicitacoes').update({pendencia_doc:true, pendencia_descricao:'Documento adicional solicitado pelo pós-vendas.'}).eq('id', id)
+            .then(function(){ showToast('Pendência registrada — cliente já vê no app dele'); });
+        } else if(action==='pv-clear-pend'){
+          work = sb.from('solicitacoes').update({pendencia_doc:false, pendencia_descricao:null}).eq('id', id)
+            .then(function(){ return addHistorico('solicitacao', id, 'Pendência de documento resolvida.'); })
+            .then(function(){ showToast('Pendência resolvida'); });
+        } else {
+          work = Promise.resolve();
+        }
+        work.catch(function(){ showToast('Não deu certo — tente de novo'); }).then(function(){
+          closeSheet();
+          return refreshData();
+        }).then(function(){
+          renderAppBar(); renderBottomTabbar(); renderContent();
+        });
+      });
+    });
+    document.querySelectorAll('[data-download]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var path = btn.dataset.download;
+        sb.storage.from('documentos').createSignedUrl(path, 300).then(function(res){
+          if(res.error || !res.data){ showToast('Não consegui gerar o link — tente de novo'); return; }
+          window.open(res.data.signedUrl, '_blank');
+        });
+      });
+    });
+  }
+
+  /* ============== INÍCIO ============== */
+  boot();
+})();
+</script>
+</script>
