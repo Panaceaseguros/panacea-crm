@@ -158,8 +158,8 @@
   .btn-danger{background:var(--critical-tint); color:var(--critical);}
   .btn-row{display:flex; flex-direction:column; gap:.55rem; margin-top:1rem;}
 
-  .tabbar{flex:none; display:flex; border-top:1px solid var(--border); background:var(--surface); padding-bottom:env(safe-area-inset-bottom);}
-  .tabbar button{flex:1; background:none; border:none; padding:.55rem .2rem .7rem; display:flex; flex-direction:column; align-items:center; gap:.2rem; cursor:pointer; color:var(--ink-faint);}
+  .tabbar{flex:none; display:flex; overflow-x:auto; border-top:1px solid var(--border); background:var(--surface); padding-bottom:env(safe-area-inset-bottom);}
+  .tabbar button{flex:1 1 0; background:none; border:none; padding:.55rem .35rem .7rem; display:flex; flex-direction:column; align-items:center; gap:.2rem; cursor:pointer; color:var(--ink-faint); white-space:nowrap;}
   .tabbar button svg{width:19px; height:19px;}
   .tabbar button span{font-size:.62rem; font-weight:700;}
   .tabbar button[aria-selected="true"]{color:var(--teal-900);}
@@ -322,21 +322,22 @@
 
   /* ============== PAPÉIS / ABAS (sem seletor livre — cada login já é um papel) ============== */
   var ROLES_META = {
-    vendedor:{label:'Vendedor', tabs:[{key:'leads',label:'Leads',icon:'kanban'},{key:'clientes',label:'Fechados',icon:'check'},{key:'perfil',label:'Perfil',icon:'user'}]},
-    administrativo:{label:'Administrativo', tabs:[{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'financeiro',label:'Financeiro',icon:'coin'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'visao-adm',label:'Visão geral',icon:'chart'}]},
-    posvendas:{label:'Pós-vendas', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'}]},
+    vendedor:{label:'Vendedor', tabs:[{key:'leads',label:'Leads',icon:'kanban'},{key:'clientes',label:'Fechados',icon:'check'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'perfil',label:'Perfil',icon:'user'}]},
+    administrativo:{label:'Administrativo', tabs:[{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'financeiro',label:'Financeiro',icon:'coin'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'visao-adm',label:'Visão geral',icon:'chart'}]},
+    posvendas:{label:'Pós-vendas', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'},{key:'recibos',label:'Recibos',icon:'coin'}]},
     rh:{label:'RH da Empresa', tabs:[{key:'minhas-rh',label:'Solicitações',icon:'list'},{key:'nova-rh',label:'Nova',icon:'plus'},{key:'desempenho-rh',label:'Desempenho',icon:'chart'},{key:'pendencias-rh',label:'Pendências',icon:'alert'}]},
     cliente:{label:'Cliente Final', tabs:[{key:'minhas-cli',label:'Meus pedidos',icon:'list'},{key:'pendencias-cli',label:'Pendências',icon:'alert'},{key:'nova-cli',label:'Novo pedido',icon:'plus'}]},
-    gestao:{label:'Gestão', tabs:[{key:'visao-geral',label:'Visão geral',icon:'chart'},{key:'departamentos',label:'Departamentos',icon:'kanban'},{key:'alertas',label:'Alertas',icon:'alert'}]},
-    implantacao:{label:'Implantação', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'clientes',label:'Fechados',icon:'check'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'}]}
+    gestao:{label:'Gestão', tabs:[{key:'visao-geral',label:'Visão geral',icon:'chart'},{key:'departamentos',label:'Departamentos',icon:'kanban'},{key:'alertas',label:'Alertas',icon:'alert'},{key:'recibos',label:'Recibos',icon:'coin'}]},
+    implantacao:{label:'Implantação', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'clientes',label:'Fechados',icon:'check'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'},{key:'recibos',label:'Recibos',icon:'coin'}]}
   };
 
   /* ============== ESTADO ============== */
   var session = null;
   var perfil = null; // {id, papel, nome, email, empresaId, empresaNome}
-  var STATE = { leads:[], tasks:[], posvendas:[], inclusaoPropostas:[], financeiro:[] };
+  var STATE = { leads:[], tasks:[], posvendas:[], inclusaoPropostas:[], financeiro:[], recibos:[], equipeInterna:[] };
   var posvendasFiltro = 'meus';
   var currentDept = 'leads';
+  var recibosMode = 'lista';
   var lastTabByRole = {};
 
   /* ============== AUTENTICAÇÃO ============== */
@@ -627,6 +628,7 @@
       case 'visao-geral': html = viewVisaoGeralGestao(); break;
       case 'departamentos': html = viewDepartamentosGestao(); break;
       case 'alertas': html = viewAlertasGestao(); break;
+      case 'recibos': html = viewRecibos(); break;
       default: html = '<div class="content-pad">Em construção.</div>';
     }
     area.innerHTML = filterSwitcherHtml() + html;
@@ -654,12 +656,42 @@
         if(el.dataset.switch==='posvendas-filtro'){ posvendasFiltro = el.dataset.value; renderContent(); }
       });
     });
+    document.querySelectorAll('[data-recibos-mode]').forEach(function(el){
+      el.addEventListener('click', function(){ recibosMode = el.dataset.recibosMode; renderContent(); });
+    });
+    document.querySelectorAll('[data-recibo-confirm]').forEach(function(el){
+      el.addEventListener('click', function(){
+        el.disabled = true;
+        sb.rpc('confirmar_recibo', { p_id: el.dataset.reciboConfirm }).then(function(res){
+          if(res.error){ el.disabled=false; showToast('Não deu pra confirmar — tente de novo'); return; }
+          showToast('Recibo confirmado');
+          refreshData().then(function(){ renderContent(); });
+        });
+      });
+    });
     var form = document.getElementById('novaSolicForm');
     if(form) form.addEventListener('submit', handleNovaSolicSubmit);
     var fileInput = document.getElementById('novaSolicFile');
     if(fileInput) fileInput.addEventListener('change', function(){
       var chip = document.getElementById('attachChip');
       if(fileInput.files && fileInput.files[0]){ chip.style.display='inline-flex'; chip.querySelector('span').textContent = fileInput.files[0].name; }
+    });
+    var reciboForm = document.getElementById('novoReciboForm');
+    if(reciboForm) reciboForm.addEventListener('submit', handleNovoReciboSubmit);
+    var reciboFileInput = document.getElementById('novoReciboFile');
+    if(reciboFileInput) reciboFileInput.addEventListener('change', function(){
+      var chip = document.getElementById('reciboAttachChip');
+      if(reciboFileInput.files && reciboFileInput.files[0]){ chip.style.display='inline-flex'; chip.querySelector('span').textContent = reciboFileInput.files[0].name; }
+    });
+    document.querySelectorAll('[data-download]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var path = btn.dataset.download;
+        var bucket = btn.dataset.bucket || 'documentos';
+        sb.storage.from(bucket).createSignedUrl(path, 300).then(function(res){
+          if(res.error || !res.data){ showToast('Não consegui gerar o link — tente de novo'); return; }
+          window.open(res.data.signedUrl, '_blank');
+        });
+      });
     });
   }
 
@@ -801,13 +833,34 @@
 
   function refreshData(){
     var p = perfil.papel;
-    if(p==='vendedor') return fetchLeads();
-    if(p==='administrativo') return Promise.all([fetchTasks(), fetchInclusao(), fetchFinanceiro()]);
-    if(p==='posvendas') return fetchPosvendas(true);
+    if(p==='vendedor') return Promise.all([fetchLeads(), fetchRecibos()]);
+    if(p==='administrativo') return Promise.all([fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchRecibos()]);
+    if(p==='posvendas') return Promise.all([fetchPosvendas(true), fetchRecibos()]);
     if(p==='rh' || p==='cliente') return fetchPosvendas(false);
-    if(p==='gestao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchPosvendas(true)]);
-    if(p==='implantacao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchPosvendas(true)]);
+    if(p==='gestao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchPosvendas(true), fetchRecibos()]);
+    if(p==='implantacao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchPosvendas(true), fetchRecibos()]);
     return Promise.resolve();
+  }
+
+  function fetchRecibos(){
+    return sb.from('recibos').select('*, colaborador:perfis!recibos_colaborador_id_fkey(nome), lancado:perfis!recibos_lancado_por_fkey(nome)').order('created_at', {ascending:false}).then(function(res){
+      if(res.error){ STATE.recibos=[]; return; }
+      STATE.recibos = (res.data||[]).map(function(r){
+        return {
+          id: r.id, tipo: r.tipo, referencia: r.referencia, valor: r.valor,
+          nomeArquivo: r.nome_arquivo, storagePath: r.storage_path,
+          colaboradorId: r.colaborador_id, colaboradorNome: r.colaborador ? r.colaborador.nome : '—',
+          lancadoPorNome: r.lancado ? r.lancado.nome : '—',
+          criadoEm: fmtDateBR(r.created_at), confirmadoEm: r.confirmado_em ? fmtDateBR(r.confirmado_em) : null
+        };
+      });
+    });
+  }
+
+  function fetchEquipeInterna(){
+    return sb.from('perfis').select('id,nome,papel').in('papel', ['vendedor','administrativo','posvendas','gestao','implantacao']).order('nome').then(function(res){
+      STATE.equipeInterna = res.error ? [] : (res.data||[]);
+    });
   }
 
   /* ============== VIEW: Vendedor ============== */
@@ -1030,6 +1083,95 @@
       Promise.all([afterHist, afterUpload]).then(function(){
         showToast('Solicitação enviada');
         lastTabByRole[perfil.papel] = origemTipo==='rh' ? 'minhas-rh' : 'minhas-cli';
+        refreshData().then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); btn.disabled=false; });
+      });
+    });
+  }
+
+  /* ============== VIEW: Recibos (equipe interna) ============== */
+  function viewRecibos(){
+    var podeGerenciar = (perfil.papel==='administrativo' || perfil.papel==='gestao');
+    if(podeGerenciar && recibosMode==='novo') return viewNovoRecibo();
+    var rows = STATE.recibos;
+    var html = '<div class="content-pad">'+
+      '<div style="display:flex; justify-content:space-between; align-items:center; gap:.6rem; margin-bottom:.7rem">'+
+        '<div class="section-label" style="margin-bottom:0">Recibos'+(podeGerenciar?'':'')+'</div>'+
+        (podeGerenciar ? '<button class="btn btn-primary" style="width:auto" data-recibos-mode="novo">'+ic('plus')+' Novo recibo</button>' : '')+
+      '</div>';
+    if(!rows.length){
+      html += '<p class="row-sub">'+(podeGerenciar ? 'Nenhum recibo lançado ainda.' : 'Você ainda não tem recibos por aqui.')+'</p>';
+    }
+    html += rows.map(function(r){
+      var statusChip = r.confirmadoEm
+        ? '<span class="chip chip-ok">'+ic('check')+' Confirmado em '+r.confirmadoEm+'</span>'
+        : '<span class="chip chip-warn">'+ic('clock')+' Aguardando confirmação</span>';
+      var actions = '';
+      if(r.colaboradorId===perfil.id && !r.confirmadoEm){
+        actions += '<button class="btn btn-primary" data-recibo-confirm="'+r.id+'">'+ic('check')+' Confirmar recibo</button>';
+      }
+      if(r.storagePath){
+        actions += '<button class="btn btn-ghost" data-download="'+r.storagePath+'" data-bucket="recibos">'+ic('doc')+' Baixar arquivo</button>';
+      }
+      return '<div class="row-card" style="cursor:default; margin-bottom:.6rem"><div class="row-top">'+
+        '<div><div class="row-title">'+r.referencia+(podeGerenciar ? ' · '+r.colaboradorNome : '')+'</div>'+
+        '<div class="row-sub mono">'+fmtMoney(r.valor)+' · lançado por '+r.lancadoPorNome+' em '+r.criadoEm+'</div></div>'+
+        statusChip+'</div>'+
+        (actions ? '<div class="btn-row">'+actions+'</div>' : '')+
+        '</div>';
+    }).join('');
+    html += '</div>';
+    return html;
+  }
+
+  function viewNovoRecibo(){
+    if(!STATE.equipeInterna.length) fetchEquipeInterna().then(function(){ if(lastTabByRole[perfil.papel]==='recibos') renderContent(); });
+    var opcoes = STATE.equipeInterna.map(function(p){ return '<option value="'+p.id+'">'+p.nome+'</option>'; }).join('');
+    return '<div class="content-pad">'+
+      '<div class="section-label">Lançar novo recibo</div>'+
+      '<form id="novoReciboForm">'+
+        '<div class="field"><label>Colaborador</label><select name="colaborador" required>'+
+          '<option value="">Selecione...</option>'+opcoes+'</select></div>'+
+        '<div class="field"><label>Tipo</label><select name="tipo"><option value="comissao">Comissão</option><option value="outro">Outro</option></select></div>'+
+        '<div class="field"><label>Referência</label><input type="text" name="referencia" placeholder="Ex: Setembro/2026" required /></div>'+
+        '<div class="field"><label>Valor (R$)</label><input type="number" name="valor" step="0.01" min="0" placeholder="0,00" required /></div>'+
+        '<div class="field"><label>Arquivo do recibo (opcional)</label>'+
+          '<label class="attach-mock" for="novoReciboFile">'+ic('upload')+'<span id="reciboAttachLabel">Toque para anexar o PDF do recibo</span></label>'+
+          '<input type="file" id="novoReciboFile" hidden />'+
+          '<span class="attach-chip" id="reciboAttachChip" style="display:none">'+ic('paperclip')+'<span></span></span>'+
+        '</div>'+
+        '<div class="btn-row">'+
+          '<button type="submit" class="btn btn-primary">'+ic('plus')+' Lançar recibo</button>'+
+          '<button type="button" class="btn btn-ghost" data-recibos-mode="lista">Cancelar</button>'+
+        '</div>'+
+      '</form></div>';
+  }
+
+  function handleNovoReciboSubmit(e){
+    e.preventDefault();
+    var form = e.target;
+    var colaboradorId = form.colaborador.value;
+    var tipo = form.tipo.value;
+    var referencia = form.referencia.value.trim();
+    var valor = parseFloat(form.valor.value || '0');
+    var fileInput = document.getElementById('novoReciboFile');
+    var file = fileInput && fileInput.files && fileInput.files[0];
+    if(!colaboradorId || !referencia){ showToast('Preencha colaborador e referência'); return; }
+    var btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    sb.from('recibos').insert({
+      colaborador_id: colaboradorId, tipo: tipo, referencia: referencia, valor: valor, lancado_por: perfil.id
+    }).select().single().then(function(res){
+      if(res.error){ btn.disabled=false; showToast('Não deu pra lançar — tente de novo'); return; }
+      var row = res.data;
+      var afterUpload = file
+        ? sb.storage.from('recibos').upload(row.id+'/'+Date.now()+'_'+file.name, file).then(function(upRes){
+            if(upRes.error) return;
+            return sb.from('recibos').update({ nome_arquivo: file.name, storage_path: upRes.data.path }).eq('id', row.id);
+          })
+        : Promise.resolve();
+      afterUpload.then(function(){
+        showToast('Recibo lançado');
+        recibosMode = 'lista';
         refreshData().then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); btn.disabled=false; });
       });
     });
