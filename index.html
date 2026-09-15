@@ -327,7 +327,8 @@
     posvendas:{label:'Pós-vendas', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'}]},
     rh:{label:'RH da Empresa', tabs:[{key:'minhas-rh',label:'Solicitações',icon:'list'},{key:'nova-rh',label:'Nova',icon:'plus'},{key:'desempenho-rh',label:'Desempenho',icon:'chart'},{key:'pendencias-rh',label:'Pendências',icon:'alert'}]},
     cliente:{label:'Cliente Final', tabs:[{key:'minhas-cli',label:'Meus pedidos',icon:'list'},{key:'pendencias-cli',label:'Pendências',icon:'alert'},{key:'nova-cli',label:'Novo pedido',icon:'plus'}]},
-    gestao:{label:'Gestão', tabs:[{key:'visao-geral',label:'Visão geral',icon:'chart'},{key:'departamentos',label:'Departamentos',icon:'kanban'},{key:'alertas',label:'Alertas',icon:'alert'}]}
+    gestao:{label:'Gestão', tabs:[{key:'visao-geral',label:'Visão geral',icon:'chart'},{key:'departamentos',label:'Departamentos',icon:'kanban'},{key:'alertas',label:'Alertas',icon:'alert'}]},
+    implantacao:{label:'Implantação', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'clientes',label:'Fechados',icon:'check'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'}]}
   };
 
   /* ============== ESTADO ============== */
@@ -556,6 +557,7 @@
     if(perfil.papel==='vendedor') return perfil.nome + ' · Consultor comercial';
     if(perfil.papel==='administrativo') return perfil.nome + ' · Time administrativo';
     if(perfil.papel==='gestao') return perfil.nome + ' · Visão de toda a Panacea';
+    if(perfil.papel==='implantacao') return perfil.nome + ' · Pós-vendas e implantação';
     return perfil.nome;
   }
 
@@ -804,6 +806,7 @@
     if(p==='posvendas') return fetchPosvendas(true);
     if(p==='rh' || p==='cliente') return fetchPosvendas(false);
     if(p==='gestao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchPosvendas(true)]);
+    if(p==='implantacao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchPosvendas(true)]);
     return Promise.resolve();
   }
 
@@ -1132,7 +1135,7 @@
       '<div class="kv"><span class="k">Etapa</span><span class="v">'+stageLabel(t.etapa)+'</span></div>'+
       '<div class="kv"><span class="k">Prazo</span><span class="v">'+t.prazo+(t.atrasada?' (atrasada)':'')+'</span></div>'+
       '<div class="kv"><span class="k">Responsável</span><span class="v">'+t.responsavel+'</span></div>';
-    if(perfil.papel==='administrativo' && nextStage){
+    if((perfil.papel==='administrativo' || perfil.papel==='implantacao') && nextStage){
       html += '<div class="btn-row"><button class="btn btn-primary" data-action="task-advance" data-id="'+id+'" data-to="'+nextStage+'">'+ic('chev')+' Mover para "'+stageLabel(nextStage)+'"</button></div>';
     }
     openSheet(html);
@@ -1149,7 +1152,7 @@
       '<div class="kv"><span class="k">Prazo</span><span class="v">'+t.prazo+(t.atrasada?' (atrasada)':'')+'</span></div>'+
       '<div class="kv"><span class="k">Responsável</span><span class="v">'+t.responsavel+'</span></div>'+
       '<div class="section-label" style="margin-top:1rem">Histórico</div>'+timelineHtml(t.historico);
-    if(perfil.papel==='administrativo' && nextStage){
+    if((perfil.papel==='administrativo' || perfil.papel==='implantacao') && nextStage){
       html += '<div class="btn-row"><button class="btn btn-primary" data-action="incl-advance" data-id="'+id+'" data-to="'+nextStage+'">'+ic('chev')+' Mover para "'+stageLabel(nextStage)+'"</button></div>';
     }
     openSheet(html);
@@ -1205,7 +1208,7 @@
       }).join('');
     }
     html += '<div class="section-label" style="margin-top:1rem">Histórico</div>'+timelineHtml(p.historico);
-    if(internal && perfil.papel==='posvendas'){
+    if(internal && (perfil.papel==='posvendas' || perfil.papel==='implantacao')){
       html += '<div class="btn-row">';
       if(!p._responsavelId) html += '<button class="btn btn-gold" data-action="pv-claim" data-id="'+id+'">'+ic('user')+' Assumir este atendimento</button>';
       if(nextStage) html += '<button class="btn btn-primary" data-action="pv-advance" data-id="'+id+'" data-to="'+nextStage+'">'+ic('chev')+' Mover para "'+stageLabel(nextStage)+'"</button>';
@@ -1306,5 +1309,4 @@
   /* ============== INÍCIO ============== */
   boot();
 })();
-</script>
 </script>
