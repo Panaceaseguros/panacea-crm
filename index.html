@@ -3,6 +3,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root{
     --bg:#F7F5EC; --surface:#FFFFFF; --surface-2:#F0EDE1; --border:#E3DFCF;
@@ -756,6 +758,12 @@
         });
       });
     });
+    document.querySelectorAll('[data-recibo-baixar-pdf]').forEach(function(el){
+      el.addEventListener('click', function(){
+        var r = STATE.recibosMensais.find(function(x){return x.id===el.dataset.reciboBaixarPdf;});
+        if(r) gerarPdfRecibo(r);
+      });
+    });
     var form = document.getElementById('novaSolicForm');
     if(form) form.addEventListener('submit', handleNovaSolicSubmit);
     var fileInput = document.getElementById('novaSolicFile');
@@ -1340,6 +1348,139 @@
     return lancamentosDoRecibo(reciboId).reduce(function(s,l){return s+l.valor;},0);
   }
 
+  // Gera o recibo em PDF, no mesmo desenho (faixas cinza, semana a semana,
+  // subtotal e total) usado na tela — pra imprimir e arquivar.
+  function gerarPdfRecibo(r){
+    if(!window.jspdf || !window.jspdf.jsPDF){ showToast('PDF ainda carregando — tenta de novo em 1 segundo'); return; }
+    var lancamentos = lancamentosDoRecibo(r.id);
+    var weeks = weeksForMonth(r.referenciaMes);
+    var total = lancamentos.reduce(function(s,l){return s+l.valor;},0);
+    var refDate = new Date(r.referenciaMes+'T00:00:00');
+    var ultimoDia = new Date(refDate.getFullYear(), refDate.getMonth()+1, 0);
+    var refLabel = r.referenciaMes.slice(0,7).replace('-','.');
+
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({ unit:'mm', format:'a4' });
+    var pageW = doc.internal.pageSize.getWidth();
+    var marginX = 15;
+    var contentW = pageW - marginX*2;
+    var valorW = 34;
+    var descW = contentW - valorW;
+    var INK = [21,36,32];
+    var GREY_BAR = [166,166,166];
+    var GREY_BAND = [217,217,217];
+
+    var y = 16;
+    doc.setTextColor.apply(doc, INK);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9.5);
+    doc.text(String(ultimoDia.getDate())+'   '+MESES[ultimoDia.getMonth()]+'   '+ultimoDia.getFullYear(), marginX, y);
+    y += 5;
+
+    var boxTop = y;
+    doc.setFillColor.apply(doc, GREY_BAR);
+    doc.rect(marginX, y, contentW, 8, 'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(10.5);
+    doc.text('RECIBO Nº '+refLabel, marginX+3, y+5.4);
+    doc.text('VALOR', marginX+contentW-20, y+5.4);
+    y += 8;
+
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9.5);
+    y += 7;
+    doc.text('Recebi (emos) de: ', marginX+3, y);
+    var larguraLabel = doc.getTextWidth('Recebi (emos) de: ');
+    doc.setFont('helvetica','bold');
+    doc.text('Corretora de Seguros Panacea', marginX+3+larguraLabel, y);
+    y += 5;
+
+    var body = [];
+    var rowKinds = [];
+    weeks.forEach(function(w){
+      var itens = lancamentos.filter(function(l){return l.semanaInicio===w.inicio;});
+      var subtotal = itens.reduce(function(s,l){return s+l.valor;},0);
+      body.push([{ content:'recebido '+fmtDatePtCurto(w.inicio)+' - '+fmtDatePtCurto(w.fim), colSpan:2, styles:{ fillColor:GREY_BAND, fontStyle:'bold', halign:'center' } }]);
+      rowKinds.push('semana');
+      itens.forEach(function(l){
+        body.push([ l.descricao, fmtMoneySigned(l.valor) ]);
+        rowKinds.push('item');
+      });
+      body.push([
+        { content:'SUBTOTAL recebido na semana', styles:{ fillColor:GREY_BAND, fontStyle:'bold' } },
+        { content: fmtMoneySigned(subtotal), styles:{ fillColor:GREY_BAND, fontStyle:'bold', halign:'right' } }
+      ]);
+      rowKinds.push('subtotal');
+    });
+    body.push([
+      { content:'TOTAL', styles:{ fontStyle:'bold', fontSize:10 } },
+      { content: fmtMoney(total), styles:{ fontStyle:'bold', fontSize:10, halign:'right' } }
+    ]);
+    rowKinds.push('total');
+
+    doc.autoTable({
+      startY: y,
+      margin: { left: marginX, right: marginX },
+      tableWidth: contentW,
+      theme: 'plain',
+      styles: { font:'helvetica', fontSize:9, textColor:INK, cellPadding:{top:1.6,bottom:1.6,left:3,right:3}, lineColor:[210,210,210], lineWidth:0.15, overflow:'linebreak' },
+      columnStyles: { 0:{ cellWidth:descW }, 1:{ cellWidth:valorW, halign:'right' } },
+      body: body,
+      didParseCell: function(data){
+        if(rowKinds[data.row.index]==='total' && data.column.index===1){
+          data.cell.styles.lineWidth = 0.4;
+          data.cell.styles.lineColor = INK;
+        }
+      }
+    });
+
+    y = doc.lastAutoTable.finalY + 6;
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica','italic');
+    doc.text('e para clareza firmo (amos) a presente.', marginX+3, y);
+    y += 5.5;
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9);
+    doc.text('São Paulo , '+ultimoDia.getDate()+' de '+MESES[ultimoDia.getMonth()]+' de '+ultimoDia.getFullYear(), marginX+3, y);
+    y += 6;
+    doc.text('Nome: ', marginX+3, y);
+    var lnome = doc.getTextWidth('Nome: ');
+    doc.setFont('helvetica','bold');
+    doc.text(r.colaboradorNome, marginX+3+lnome, y);
+    doc.setFont('helvetica','normal');
+    doc.text('CNPJ: —', marginX+contentW-28, y);
+    y += 6;
+    doc.setFontSize(8.3);
+    var legal = doc.splitTextToSize('Prestação de serviços como promoção de vendas, contatos comerciais, entre outras atividades. 1x ao mês emitir Nota para a PANACEA dos valores recebidos totais.', contentW-6);
+    doc.text(legal, marginX+3, y);
+    y += legal.length*4 + 8;
+
+    if(r.status==='confirmado'){
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(9);
+      doc.text('Confirmado digitalmente por '+r.colaboradorNome+' em '+r.confirmadoEm, marginX+3, y);
+      y += 6;
+    } else {
+      doc.setDrawColor(150,150,150);
+      doc.setLineWidth(0.2);
+      doc.line(marginX+contentW-70, y, marginX+contentW-3, y);
+      y += 4.5;
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(8.5);
+      var lblAss = 'ASSINATURA';
+      doc.text(lblAss, marginX+contentW-70 + (67 - doc.getTextWidth(lblAss))/2, y);
+      y += 4;
+    }
+
+    var boxBottom = y + 3;
+    doc.setDrawColor(20,20,20);
+    doc.setLineWidth(0.5);
+    doc.rect(marginX, boxTop, contentW, boxBottom-boxTop);
+
+    var nomeArquivo = 'Recibo_'+r.colaboradorNome.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+refLabel.replace('.','-')+'.pdf';
+    doc.save(nomeArquivo);
+  }
+
   function viewRecibos(){
     var isFinanceiro = (perfil.papel==='administrativo' || perfil.papel==='gestao');
     if(recibosMode==='novo-mes') return viewNovoRecibosMes();
@@ -1444,7 +1585,10 @@
       ? '<button class="btn btn-ghost" data-recibo-reabrir="'+r.id+'" style="margin-top:.5rem">Reabrir recibo</button>' : '';
 
     return '<div class="content-pad">'+
-      '<button class="btn btn-ghost" style="width:auto; margin-bottom:.7rem" data-recibos-mode="lista">'+ic('chev')+' Voltar</button>'+
+      '<div class="btn-row" style="flex-direction:row; margin-bottom:.7rem">'+
+        '<button class="btn btn-ghost" style="width:auto" data-recibos-mode="lista">'+ic('chev')+' Voltar</button>'+
+        '<button class="btn btn-primary" style="width:auto" data-recibo-baixar-pdf="'+r.id+'">'+ic('doc')+' Baixar recibo em PDF</button>'+
+      '</div>'+
       '<div class="recibo-doc">'+
         '<div class="recibo-doc-head"><span>RECIBO Nº '+r.referenciaMes.slice(0,7).replace('-','.')+'</span><span>VALOR</span></div>'+
         '<div class="recibo-doc-sub">Recebi(emos) de: <b>Corretora de Seguros Panacea</b></div>'+
@@ -1457,7 +1601,7 @@
           footer+
         '</div>'+
       '</div>'+
-      acoesFinanceiro+reabrir+
+      '<div>'+acoesFinanceiro+reabrir+'</div>'+
     '</div>';
   }
 
