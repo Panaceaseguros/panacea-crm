@@ -336,6 +336,14 @@
     if(isNaN(d.getTime())) return 0;
     return Math.max(0, Math.ceil((d.getTime() - Date.now())/86400000));
   }
+  // Dias corridos entre duas datas/timestamps (usado pro tempo médio de
+  // atendimento do pós-vendas). Retorna null se alguma data for inválida.
+  function diasEntreDatas(a, b){
+    if(!a || !b) return null;
+    var da = new Date(a), db = new Date(b);
+    if(isNaN(da.getTime()) || isNaN(db.getTime())) return null;
+    return Math.max(0, Math.round((db.getTime()-da.getTime())/86400000));
+  }
   // Próxima data de aniversário de um contrato (dia/mês), projetando pro
   // próximo ano se a data deste ano já passou.
   function proximoAniversario(dia, mes){
@@ -372,11 +380,11 @@
   var ROLES_META = {
     vendedor:{label:'Vendedor', tabs:[{key:'leads',label:'Leads',icon:'kanban'},{key:'clientes',label:'Fechados',icon:'check'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'perfil',label:'Perfil',icon:'user'}]},
     administrativo:{label:'Administrativo', tabs:[{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'financeiro',label:'Financeiro',icon:'coin'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'visao-adm',label:'Visão geral',icon:'chart'}]},
-    posvendas:{label:'Pós-vendas', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'},{key:'recibos',label:'Recibos',icon:'coin'}]},
+    posvendas:{label:'Pós-vendas', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'desempenho-pv',label:'Desempenho',icon:'chart'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'},{key:'recibos',label:'Recibos',icon:'coin'}]},
     rh:{label:'RH da Empresa', tabs:[{key:'minhas-rh',label:'Solicitações',icon:'list'},{key:'nova-rh',label:'Nova',icon:'plus'},{key:'desempenho-rh',label:'Desempenho',icon:'chart'},{key:'pendencias-rh',label:'Pendências',icon:'alert'}]},
     cliente:{label:'Cliente Final', tabs:[{key:'minhas-cli',label:'Meus pedidos',icon:'list'},{key:'pendencias-cli',label:'Pendências',icon:'alert'},{key:'nova-cli',label:'Novo pedido',icon:'plus'}]},
-    gestao:{label:'Gestão', tabs:[{key:'visao-geral',label:'Visão geral',icon:'chart'},{key:'departamentos',label:'Departamentos',icon:'kanban'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'alertas',label:'Alertas',icon:'alert'},{key:'recibos',label:'Recibos',icon:'coin'}]},
-    implantacao:{label:'Implantação', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'clientes',label:'Fechados',icon:'check'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'},{key:'recibos',label:'Recibos',icon:'coin'}]}
+    gestao:{label:'Gestão', tabs:[{key:'visao-geral',label:'Visão geral',icon:'chart'},{key:'departamentos',label:'Departamentos',icon:'kanban'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'desempenho-pv',label:'Desemp. pós-vendas',icon:'chart'},{key:'alertas',label:'Alertas',icon:'alert'},{key:'recibos',label:'Recibos',icon:'coin'}]},
+    implantacao:{label:'Implantação', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'desempenho-pv',label:'Desempenho',icon:'chart'},{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'clientes',label:'Fechados',icon:'check'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'},{key:'recibos',label:'Recibos',icon:'coin'}]}
   };
 
   /* ============== ESTADO ============== */
@@ -599,6 +607,7 @@
         if(a.expira<=3) out.push({icon:'doc', tone:'warn', text:'Anexo <b>'+a.nome+'</b> ('+p.empresaOuCliente+') expira em '+a.expira+' dia(s).'});
       });
       if(p.pendenciaDoc) out.push({icon:'alert', tone:'crit', text:'Pendência aberta com <b>'+p.empresaOuCliente+'</b>: '+p.pendenciaDescricao});
+      if(p.atrasada) out.push({icon:'alert', tone:'crit', text:'Solicitação de <b>'+p.empresaOuCliente+'</b> ('+p.tipo+') está atrasada (prazo '+p.prazo+').'});
     });
     STATE.contratos.forEach(function(c){
       var dias = diasAteAniversario(c.diaAniversario, c.mesAniversario);
@@ -693,6 +702,7 @@
       case 'alertas': html = viewAlertasGestao(); break;
       case 'recibos': html = viewRecibos(); break;
       case 'paineis': html = viewPaineisFinanceiro(); break;
+      case 'desempenho-pv': html = viewDesempenhoPosvendas(); break;
       default: html = '<div class="content-pad">Em construção.</div>';
     }
     area.innerHTML = filterSwitcherHtml() + html;
@@ -863,7 +873,7 @@
       if(res.error) return out;
       (res.data||[]).forEach(function(h){
         if(!out[h.entidade_id]) out[h.entidade_id] = [];
-        out[h.entidade_id].push({ d: fmtDateBR(h.created_at), t: h.texto });
+        out[h.entidade_id].push({ d: fmtDateBR(h.created_at), t: h.texto, interno: h.visivel_externo===false });
       });
       return out;
     });
@@ -961,6 +971,9 @@
             responsavel: (r.responsavel && r.responsavel.nome) || '',
             etapaInterna: r.etapa_interna, dataAbertura: fmtDateBR(r.data_abertura),
             pendenciaDoc: r.pendencia_doc, pendenciaDescricao: r.pendencia_descricao||'',
+            prazo: r.prazo ? fmtDateBR(r.prazo) : '', prazoISO: r.prazo || '',
+            atrasada: computeAtrasada(r.prazo, r.etapa_interna, 'concluido'),
+            dataAberturaISO: r.data_abertura, updatedAtISO: r.updated_at,
             anexos: [], historico: [], _responsavelId: r.responsavel_id
           };
         });
@@ -989,10 +1002,10 @@
     var p = perfil.papel;
     if(p==='vendedor') return Promise.all([fetchLeads(), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchComissoes()]);
     if(p==='administrativo') return Promise.all([fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes()]);
-    if(p==='posvendas') return Promise.all([fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos()]);
+    if(p==='posvendas') return Promise.all([fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchEquipeInterna()]);
     if(p==='rh' || p==='cliente') return fetchPosvendas(false);
-    if(p==='gestao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes()]);
-    if(p==='implantacao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos()]);
+    if(p==='gestao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes(), fetchEquipeInterna()]);
+    if(p==='implantacao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchEquipeInterna()]);
     return Promise.resolve();
   }
 
@@ -1193,10 +1206,52 @@
           return '<button class="card" data-open="pv:'+p.id+'"><div class="name">'+p.tipo+'</div><div class="meta">'+p.empresaOuCliente+'</div>'+
             '<div class="foot"><span class="chip '+(p.origemTipo==='rh'?'chip-info':'chip-gold')+'">'+(p.origemTipo==='rh'?'RH':'Cliente PF')+'</span>'+
             (p.pendenciaDoc ? '<span class="chip chip-crit">'+ic('alert')+' pendência</span>' : (p.anexos.length ? '<span class="chip chip-neutral">'+ic('paperclip')+' '+p.anexos.length+'</span>' : ''))+
+            (p.atrasada ? '<span class="chip chip-crit">'+ic('clock')+' atrasada</span>' : (p.prazo ? '<span class="chip chip-ok">'+ic('clock')+' '+p.prazo+'</span>' : ''))+
             respChip+'</div></button>';
         }).join('') : '<div class="empty-col">Nada aqui</div>')+'</div></div>';
     }).join('');
     return '<div class="kanban">'+cols+'</div>';
+  }
+
+  function viewDesempenhoPosvendas(){
+    var pvTeam = STATE.equipeInterna.filter(function(m){ return m.papel==='posvendas' || m.papel==='implantacao'; });
+    var porPessoa = {};
+    pvTeam.forEach(function(m){ porPessoa[m.id] = { nome:m.nome, total:0, concluidos:0, andamento:0, atrasados:0, somaDias:0, qtdDias:0 }; });
+    var semResponsavel = 0;
+    STATE.posvendas.forEach(function(p){
+      if(!p._responsavelId){ semResponsavel++; return; }
+      var b = porPessoa[p._responsavelId];
+      if(!b) return; // responsável não está mais na equipe ativa
+      b.total++;
+      if(p.etapaInterna==='concluido'){
+        b.concluidos++;
+        var dias = diasEntreDatas(p.dataAberturaISO, p.updatedAtISO);
+        if(dias!=null){ b.somaDias += dias; b.qtdDias++; }
+      } else {
+        b.andamento++;
+        if(p.atrasada) b.atrasados++;
+      }
+    });
+    var linhas = pvTeam.map(function(m){ return porPessoa[m.id]; }).sort(function(a,b){ return b.total - a.total; });
+    var cards = linhas.map(function(b){
+      var tempoMedio = b.qtdDias ? Math.round(b.somaDias/b.qtdDias) : null;
+      return '<div class="row-card" style="cursor:default; margin-bottom:.6rem">'+
+        '<div class="row-top"><div class="row-title">'+ic('user')+' '+b.nome+'</div>'+
+        (b.atrasados ? '<span class="chip chip-crit">'+b.atrasados+' atrasada(s)</span>' : '<span class="chip chip-ok">Em dia</span>')+
+        '</div>'+
+        '<div class="stat-grid" style="margin-top:.5rem; margin-bottom:0">'+
+          '<div class="stat-tile"><div class="n">'+b.total+'</div><div class="l">Atendidas no total</div></div>'+
+          '<div class="stat-tile"><div class="n">'+b.concluidos+'</div><div class="l">Concluídas</div></div>'+
+          '<div class="stat-tile"><div class="n">'+b.andamento+'</div><div class="l">Em andamento</div></div>'+
+          '<div class="stat-tile"><div class="n">'+(tempoMedio!=null?tempoMedio+'d':'—')+'</div><div class="l">Tempo médio p/ concluir</div></div>'+
+        '</div></div>';
+    }).join('');
+    return '<div class="content-pad">'+
+      '<div class="section-label">Desempenho do pós-vendas</div>'+
+      '<p class="row-sub" style="margin-bottom:.7rem">Quantidade de solicitações atendidas, concluídas e tempo médio de resolução por pessoa.</p>'+
+      (semResponsavel ? '<div class="row-card" style="cursor:default;margin-bottom:.6rem"><span class="chip chip-warn">'+semResponsavel+' solicitação(ões) sem responsável</span></div>' : '')+
+      (cards || '<div class="empty-col">Ninguém no time de pós-vendas ainda.</div>')+
+    '</div>';
   }
 
   function viewDocumentos(){
@@ -1279,10 +1334,14 @@
     var origemTipo = perfil.papel === 'rh' ? 'rh' : 'cliente';
     var btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
+    // Prazo padrão de 3 dias corridos pro primeiro atendimento — o
+    // pós-vendas pode ajustar depois, na tela de detalhe.
+    var prazoPadrao = new Date(); prazoPadrao.setDate(prazoPadrao.getDate()+3);
     var payload = {
       tipo: tipo, origem_tipo: origemTipo,
       empresa_id: origemTipo==='rh' ? perfil.empresaId : null,
-      solicitante_id: perfil.id, etapa_interna: 'recebido'
+      solicitante_id: perfil.id, etapa_interna: 'recebido',
+      prazo: toISODate(prazoPadrao)
     };
     sb.from('solicitacoes').insert(payload).select().single().then(function(res){
       if(res.error){ btn.disabled=false; showToast('Não deu pra enviar — tente de novo'); return; }
@@ -2035,7 +2094,7 @@
 
   function timelineHtml(hist){
     return '<div class="timeline">'+hist.slice().reverse().map(function(h){
-      return '<div class="tl-item"><div class="tl-dot"></div><div class="tl-tx"><div class="d">'+h.d+'</div>'+h.t+'</div></div>';
+      return '<div class="tl-item"><div class="tl-dot"></div><div class="tl-tx"><div class="d">'+h.d+(h.interno?' · <span class="chip chip-neutral" style="padding:.05rem .35rem">nota interna</span>':'')+'</div>'+h.t+'</div></div>';
     }).join('')+'</div>';
   }
 
@@ -2129,7 +2188,8 @@
     html += '<div class="kv"><span class="k">Solicitante</span><span class="v">'+p.solicitante+'</span></div>'+
       '<div class="kv"><span class="k">Aberto em</span><span class="v">'+p.dataAbertura+'</span></div>';
     if(internal){
-      html += '<div class="kv"><span class="k">Atendido por</span><span class="v">'+(p.responsavel||'—')+'</span></div>';
+      html += '<div class="kv"><span class="k">Atendido por</span><span class="v">'+(p.responsavel||'Sem responsável')+'</span></div>'+
+        '<div class="kv"><span class="k">Prazo</span><span class="v">'+(p.prazo||'—')+(p.atrasada?' <span class="chip chip-crit" style="padding:.05rem .35rem">atrasada</span>':'')+'</span></div>';
     }
     if(p.pendenciaDoc){
       html += '<div class="pending-banner">'+ic('alert')+'<span>'+p.pendenciaDescricao+'</span></div>';
@@ -2142,8 +2202,26 @@
       }).join('');
     }
     html += '<div class="section-label" style="margin-top:1rem">Histórico</div>'+timelineHtml(p.historico);
-    if(internal && (perfil.papel==='posvendas' || perfil.papel==='implantacao')){
-      html += '<div class="btn-row">';
+    var podeGerenciar = internal && (perfil.papel==='posvendas' || perfil.papel==='implantacao' || perfil.papel==='gestao');
+    if(podeGerenciar){
+      var pvTeam = STATE.equipeInterna.filter(function(m){ return m.papel==='posvendas' || m.papel==='implantacao'; });
+      var respOpts = pvTeam.map(function(m){ return '<option value="'+m.id+'"'+(m.id===p._responsavelId?' selected':'')+'>'+m.nome+'</option>'; }).join('');
+      html += '<div class="section-label" style="margin-top:1rem">Responsável</div>'+
+        '<form id="pvAtribuirForm" class="btn-row" style="flex-direction:row">'+
+          '<select name="responsavel" style="flex:1"><option value="">Sem responsável</option>'+respOpts+'</select>'+
+          '<button type="submit" class="btn btn-ghost" style="width:auto">Atribuir</button>'+
+        '</form>'+
+        '<div class="section-label" style="margin-top:1rem">Prazo</div>'+
+        '<form id="pvPrazoForm" class="btn-row" style="flex-direction:row">'+
+          '<input type="date" name="prazo" value="'+p.prazoISO+'" style="flex:1" />'+
+          '<button type="submit" class="btn btn-ghost" style="width:auto">Salvar prazo</button>'+
+        '</form>'+
+        '<div class="section-label" style="margin-top:1rem">Adicionar nota interna</div>'+
+        '<form id="pvNotaForm">'+
+          '<div class="field"><textarea name="nota" rows="2" placeholder="Ex: aguardando retorno da operadora" required></textarea></div>'+
+          '<button type="submit" class="btn btn-ghost" style="width:auto">Adicionar nota</button>'+
+        '</form>';
+      html += '<div class="btn-row" style="margin-top:1rem">';
       if(!p._responsavelId) html += '<button class="btn btn-gold" data-action="pv-claim" data-id="'+id+'">'+ic('user')+' Assumir este atendimento</button>';
       if(nextStage) html += '<button class="btn btn-primary" data-action="pv-advance" data-id="'+id+'" data-to="'+nextStage+'">'+ic('chev')+' Mover para "'+stageLabel(nextStage)+'"</button>';
       html += p.pendenciaDoc
@@ -2153,6 +2231,53 @@
     }
     openSheet(html);
     bindSheetActions();
+
+    var atribuirForm = document.getElementById('pvAtribuirForm');
+    if(atribuirForm){
+      atribuirForm.addEventListener('submit', function(e){
+        e.preventDefault();
+        var btn = atribuirForm.querySelector('button[type=submit]');
+        btn.disabled = true;
+        var novoResp = atribuirForm.responsavel.value || null;
+        var novoNome = novoResp ? (STATE.equipeInterna.find(function(m){return m.id===novoResp;})||{}).nome : null;
+        var texto = novoResp
+          ? (p._responsavelId ? 'Reatribuído para '+novoNome+' (antes: '+(p.responsavel||'sem responsável')+').' : novoNome+' foi atribuído a este atendimento.')
+          : 'Responsável removido — atendimento voltou para "sem responsável".';
+        sb.from('solicitacoes').update({ responsavel_id: novoResp, updated_at: new Date().toISOString() }).eq('id', id)
+          .then(function(){ return addHistorico('solicitacao', id, texto); })
+          .then(function(){ showToast('Responsável atualizado'); closeSheet(); return refreshData(); })
+          .then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); })
+          .catch(function(){ btn.disabled=false; showToast('Não deu — tente de novo'); });
+      });
+    }
+    var prazoForm = document.getElementById('pvPrazoForm');
+    if(prazoForm){
+      prazoForm.addEventListener('submit', function(e){
+        e.preventDefault();
+        var btn = prazoForm.querySelector('button[type=submit]');
+        btn.disabled = true;
+        var novoPrazo = prazoForm.prazo.value || null;
+        sb.from('solicitacoes').update({ prazo: novoPrazo, updated_at: new Date().toISOString() }).eq('id', id)
+          .then(function(){ return addHistorico('solicitacao', id, novoPrazo ? 'Prazo ajustado para '+fmtDateBR(novoPrazo)+'.' : 'Prazo removido.'); })
+          .then(function(){ showToast('Prazo atualizado'); closeSheet(); return refreshData(); })
+          .then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); })
+          .catch(function(){ btn.disabled=false; showToast('Não deu — tente de novo'); });
+      });
+    }
+    var notaForm = document.getElementById('pvNotaForm');
+    if(notaForm){
+      notaForm.addEventListener('submit', function(e){
+        e.preventDefault();
+        var texto = notaForm.nota.value.trim();
+        if(!texto) return;
+        var btn = notaForm.querySelector('button[type=submit]');
+        btn.disabled = true;
+        addHistorico('solicitacao', id, texto, false)
+          .then(function(){ showToast('Nota adicionada'); closeSheet(); return refreshData(); })
+          .then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); })
+          .catch(function(){ btn.disabled=false; showToast('Não deu — tente de novo'); });
+      });
+    }
 
     var resolveInput = document.getElementById('resolvePendInput');
     if(resolveInput){
@@ -2175,8 +2300,10 @@
     }
   }
 
-  function addHistorico(tipo, id, texto){
-    return sb.from('historico').insert({ entidade_tipo: tipo, entidade_id: id, texto: texto, created_by: perfil.id });
+  function addHistorico(tipo, id, texto, visivelExterno){
+    var payload = { entidade_tipo: tipo, entidade_id: id, texto: texto, created_by: perfil.id };
+    if(visivelExterno===false) payload.visivel_externo = false;
+    return sb.from('historico').insert(payload);
   }
 
   function bindSheetActions(){
