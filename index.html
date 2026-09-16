@@ -111,6 +111,28 @@
   .stat-tile{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:.75rem .8rem;}
   .stat-tile .n{font-family:var(--font-mono); font-weight:600; font-size:1.35rem; color:var(--teal-900);}
   .stat-tile .l{font-size:.72rem; color:var(--ink-muted); margin-top:1px;}
+  .bar-row{display:grid; grid-template-columns:84px 1fr auto; align-items:center; gap:.55rem; margin-bottom:.6rem;}
+  .bar-row:last-child{margin-bottom:0;}
+  .bar-label{font-size:.72rem; color:var(--ink-muted); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .bar-track{position:relative; height:10px; background:var(--surface-2); border-radius:6px; overflow:hidden;}
+  .bar-fill-prev{position:absolute; top:0; left:0; height:100%; background:var(--warning-tint); border-radius:6px;}
+  .bar-fill-rec{position:absolute; top:0; left:0; height:100%; background:var(--teal-900); border-radius:6px;}
+  .bar-vals{font-size:.68rem; color:var(--ink-muted); white-space:nowrap;}
+  .bar-legend{display:flex; gap:.9rem; font-size:.68rem; color:var(--ink-muted); margin-bottom:.7rem;}
+  .bar-legend .sw{display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:4px; vertical-align:-1px;}
+  .recibo-doc{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:.9rem; margin-bottom:1rem;}
+  .recibo-doc-head{display:flex; justify-content:space-between; font-weight:700; font-size:.85rem; background:var(--surface-2); padding:.5rem .6rem; border-radius:8px; margin-bottom:.6rem;}
+  .recibo-doc-sub{font-size:.8rem; margin-bottom:.7rem;}
+  .recibo-semana{margin-bottom:.5rem;}
+  .recibo-semana-head{font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-muted); background:var(--surface-2); padding:.35rem .5rem; border-radius:6px 6px 0 0;}
+  .recibo-linha{display:flex; justify-content:space-between; align-items:center; gap:.5rem; padding:.35rem .5rem; font-size:.78rem; border-bottom:1px solid var(--border);}
+  .recibo-linha span:first-child{flex:1;}
+  .recibo-subtotal{background:var(--surface-2); font-weight:700;}
+  .recibo-total{background:var(--teal-900); color:#fff; font-weight:700; border-radius:8px; margin-top:.5rem; padding:.6rem .65rem; border-bottom:none;}
+  .recibo-linha-del{border:none; background:none; color:var(--critical); font-size:1.05rem; line-height:1; cursor:pointer; padding:0 .2rem; flex:none;}
+  .recibo-doc-foot{margin-top:.9rem; padding-top:.7rem; border-top:1px dashed var(--border); font-size:.8rem;}
+  .recibo-assinatura{display:flex; align-items:center; gap:.4rem; font-size:.78rem; color:var(--ink-muted); margin-top:.6rem;}
+  .recibo-assinatura.ok{color:var(--success);}
   .dept-btn{width:100%; text-align:left; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:.8rem .85rem; cursor:pointer; display:flex; align-items:center; gap:.6rem; margin-bottom:9px;}
   .dept-btn:hover{border-color:var(--gold);}
   .dept-btn .ic{width:34px; height:34px; border-radius:10px; background:var(--teal-tint); color:var(--teal-900); display:grid; place-items:center; flex:none;}
@@ -271,6 +293,10 @@
   var FIN_STAGES = [
     {key:'faturar', label:'A faturar'},{key:'aguardando', label:'Aguardando pagamento'},{key:'pago', label:'Pago'},{key:'inadimplente', label:'Inadimplente'}
   ];
+  var MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var PAINEL_FIN_TABS = [
+    {k:'comissoes', l:'Comissões'},{k:'reajustes', l:'Reajustes'},{k:'vendedores', l:'Por vendedor'},{k:'inadimplencia', l:'Inadimplência'}
+  ];
   function pvClienteStatus(item){
     if(item.etapaInterna==='concluido') return {label:'Concluído', cls:'chip-ok', ic:'check'};
     if(item.etapaInterna==='recebido') return {label:'Recebido', cls:'chip-info', ic:'inbox'};
@@ -279,7 +305,7 @@
   function initials(name){ return (name||'—').split(' ').map(function(w){return w[0];}).slice(0,2).join('').toUpperCase(); }
 
   /* ============== HELPERS ============== */
-  var fmtMoney = function(n){ return n>0 ? 'R$ ' + n.toLocaleString('pt-BR') : '—'; };
+  var fmtMoney = function(n){ return n>0 ? 'R$ ' + n.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'; };
   function slaChip(dias){
     if(dias<=2) return '<span class="chip chip-ok">'+ic('clock')+' há '+dias+'d</span>';
     if(dias<=6) return '<span class="chip chip-warn">'+ic('clock')+' há '+dias+'d</span>';
@@ -308,6 +334,26 @@
     if(isNaN(d.getTime())) return 0;
     return Math.max(0, Math.ceil((d.getTime() - Date.now())/86400000));
   }
+  // Próxima data de aniversário de um contrato (dia/mês), projetando pro
+  // próximo ano se a data deste ano já passou.
+  function proximoAniversario(dia, mes){
+    var hoje = new Date(); hoje.setHours(0,0,0,0);
+    var ano = hoje.getFullYear();
+    var cand = new Date(ano, mes-1, Math.min(dia, 28));
+    // ajuste pra meses com menos dias (evita "rolar" pro mês seguinte)
+    var ultimoDiaMes = new Date(ano, mes, 0).getDate();
+    cand = new Date(ano, mes-1, Math.min(dia, ultimoDiaMes));
+    if(cand < hoje){
+      ultimoDiaMes = new Date(ano+1, mes, 0).getDate();
+      cand = new Date(ano+1, mes-1, Math.min(dia, ultimoDiaMes));
+    }
+    return cand;
+  }
+  function diasAteAniversario(dia, mes){
+    var cand = proximoAniversario(dia, mes);
+    var hoje = new Date(); hoje.setHours(0,0,0,0);
+    return Math.round((cand.getTime()-hoje.getTime())/86400000);
+  }
   function computeAtrasada(dateStr, etapa, finalKeys){
     if(!dateStr) return false;
     var finals = Array.isArray(finalKeys) ? finalKeys : [finalKeys];
@@ -323,21 +369,26 @@
   /* ============== PAPÉIS / ABAS (sem seletor livre — cada login já é um papel) ============== */
   var ROLES_META = {
     vendedor:{label:'Vendedor', tabs:[{key:'leads',label:'Leads',icon:'kanban'},{key:'clientes',label:'Fechados',icon:'check'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'perfil',label:'Perfil',icon:'user'}]},
-    administrativo:{label:'Administrativo', tabs:[{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'financeiro',label:'Financeiro',icon:'coin'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'visao-adm',label:'Visão geral',icon:'chart'}]},
+    administrativo:{label:'Administrativo', tabs:[{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'financeiro',label:'Financeiro',icon:'coin'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'visao-adm',label:'Visão geral',icon:'chart'}]},
     posvendas:{label:'Pós-vendas', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'},{key:'recibos',label:'Recibos',icon:'coin'}]},
     rh:{label:'RH da Empresa', tabs:[{key:'minhas-rh',label:'Solicitações',icon:'list'},{key:'nova-rh',label:'Nova',icon:'plus'},{key:'desempenho-rh',label:'Desempenho',icon:'chart'},{key:'pendencias-rh',label:'Pendências',icon:'alert'}]},
     cliente:{label:'Cliente Final', tabs:[{key:'minhas-cli',label:'Meus pedidos',icon:'list'},{key:'pendencias-cli',label:'Pendências',icon:'alert'},{key:'nova-cli',label:'Novo pedido',icon:'plus'}]},
-    gestao:{label:'Gestão', tabs:[{key:'visao-geral',label:'Visão geral',icon:'chart'},{key:'departamentos',label:'Departamentos',icon:'kanban'},{key:'alertas',label:'Alertas',icon:'alert'},{key:'recibos',label:'Recibos',icon:'coin'}]},
+    gestao:{label:'Gestão', tabs:[{key:'visao-geral',label:'Visão geral',icon:'chart'},{key:'departamentos',label:'Departamentos',icon:'kanban'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'alertas',label:'Alertas',icon:'alert'},{key:'recibos',label:'Recibos',icon:'coin'}]},
     implantacao:{label:'Implantação', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'clientes',label:'Fechados',icon:'check'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'},{key:'recibos',label:'Recibos',icon:'coin'}]}
   };
 
   /* ============== ESTADO ============== */
   var session = null;
   var perfil = null; // {id, papel, nome, email, empresaId, empresaNome}
-  var STATE = { leads:[], tasks:[], posvendas:[], inclusaoPropostas:[], financeiro:[], recibos:[], equipeInterna:[] };
+  var STATE = { leads:[], tasks:[], posvendas:[], inclusaoPropostas:[], financeiro:[], recibosMensais:[], recibosLancamentos:[], equipeInterna:[], contratos:[], segurados:[], comissoes:[], empresasAll:[] };
   var posvendasFiltro = 'meus';
   var currentDept = 'leads';
   var recibosMode = 'lista';
+  var recibosSelecionadoId = null;
+  var painelFinTab = 'comissoes';
+  var painelFinMode = 'lista'; // 'lista' | 'novo-contrato' | 'novo-segurado' | 'nova-comissao'
+  var painelFinContratoId = null; // contrato em foco (pra "nova comissão"/"novo segurado" pré-preenchido)
+  var reajusteAvisoDias = 30;
   var lastTabByRole = {};
 
   /* ============== AUTENTICAÇÃO ============== */
@@ -547,6 +598,16 @@
       });
       if(p.pendenciaDoc) out.push({icon:'alert', tone:'crit', text:'Pendência aberta com <b>'+p.empresaOuCliente+'</b>: '+p.pendenciaDescricao});
     });
+    STATE.contratos.forEach(function(c){
+      var dias = diasAteAniversario(c.diaAniversario, c.mesAniversario);
+      if(dias<=30) out.push({icon:'clock', tone:(dias<=7?'crit':'warn'), text:'Reajuste de <b>'+c.empresaNome+'</b> ('+c.operadora+') em '+dias+' dia(s) — aniversário do contrato.'});
+    });
+    STATE.segurados.forEach(function(s){
+      if(s.situacao==='inadimplente') out.push({icon:'alert', tone:'crit', text:'<b>'+s.nome+'</b> ('+s.empresaNome+') está inadimplente.'});
+    });
+    STATE.comissoes.forEach(function(c){
+      if(c.status==='atrasado') out.push({icon:'alert', tone:'crit', text:'Comissão de <b>'+c.operadora+'</b> ('+c.empresaNome+', '+c.referenciaLabel+') está atrasada.'});
+    });
     return out;
   }
 
@@ -629,6 +690,7 @@
       case 'departamentos': html = viewDepartamentosGestao(); break;
       case 'alertas': html = viewAlertasGestao(); break;
       case 'recibos': html = viewRecibos(); break;
+      case 'paineis': html = viewPaineisFinanceiro(); break;
       default: html = '<div class="content-pad">Em construção.</div>';
     }
     area.innerHTML = filterSwitcherHtml() + html;
@@ -657,14 +719,39 @@
       });
     });
     document.querySelectorAll('[data-recibos-mode]').forEach(function(el){
-      el.addEventListener('click', function(){ recibosMode = el.dataset.recibosMode; renderContent(); });
+      el.addEventListener('click', function(){
+        recibosMode = el.dataset.recibosMode;
+        if(recibosMode==='lista') recibosSelecionadoId = null;
+        renderContent();
+      });
     });
-    document.querySelectorAll('[data-recibo-confirm]').forEach(function(el){
+    document.querySelectorAll('[data-recibo-abrir]').forEach(function(el){
+      el.addEventListener('click', function(){ recibosSelecionadoId = el.dataset.reciboAbrir; recibosMode='detalhe'; renderContent(); });
+    });
+    document.querySelectorAll('[data-recibo-confirmar]').forEach(function(el){
       el.addEventListener('click', function(){
         el.disabled = true;
-        sb.rpc('confirmar_recibo', { p_id: el.dataset.reciboConfirm }).then(function(res){
+        sb.rpc('confirmar_recibo_mensal', { p_id: el.dataset.reciboConfirmar }).then(function(res){
           if(res.error){ el.disabled=false; showToast('Não deu pra confirmar — tente de novo'); return; }
           showToast('Recibo confirmado');
+          refreshData().then(function(){ renderContent(); });
+        });
+      });
+    });
+    document.querySelectorAll('[data-recibo-reabrir]').forEach(function(el){
+      el.addEventListener('click', function(){
+        el.disabled = true;
+        sb.from('recibos_mensais').update({ status:'aberto', confirmado_em:null }).eq('id', el.dataset.reciboReabrir).then(function(res){
+          if(res.error){ el.disabled=false; showToast('Não deu — tente de novo'); return; }
+          refreshData().then(function(){ renderContent(); });
+        });
+      });
+    });
+    document.querySelectorAll('[data-lancamento-del]').forEach(function(el){
+      el.addEventListener('click', function(){
+        el.disabled = true;
+        sb.from('recibo_lancamentos').delete().eq('id', el.dataset.lancamentoDel).then(function(res){
+          if(res.error){ el.disabled=false; showToast('Não deu — tente de novo'); return; }
           refreshData().then(function(){ renderContent(); });
         });
       });
@@ -676,12 +763,24 @@
       var chip = document.getElementById('attachChip');
       if(fileInput.files && fileInput.files[0]){ chip.style.display='inline-flex'; chip.querySelector('span').textContent = fileInput.files[0].name; }
     });
-    var reciboForm = document.getElementById('novoReciboForm');
-    if(reciboForm) reciboForm.addEventListener('submit', handleNovoReciboSubmit);
-    var reciboFileInput = document.getElementById('novoReciboFile');
-    if(reciboFileInput) reciboFileInput.addEventListener('change', function(){
-      var chip = document.getElementById('reciboAttachChip');
-      if(reciboFileInput.files && reciboFileInput.files[0]){ chip.style.display='inline-flex'; chip.querySelector('span').textContent = reciboFileInput.files[0].name; }
+    var recibosMesForm = document.getElementById('novoRecibosMesForm');
+    if(recibosMesForm) recibosMesForm.addEventListener('submit', handleNovoRecibosMesSubmit);
+    var lancamentoForm = document.getElementById('novoLancamentoForm');
+    if(lancamentoForm) lancamentoForm.addEventListener('submit', handleNovoLancamentoSubmit);
+    var lancamentoTipoSelect = document.getElementById('lancamentoTipo');
+    if(lancamentoTipoSelect) lancamentoTipoSelect.addEventListener('change', function(){
+      var form2 = lancamentoTipoSelect.closest('form');
+      var r = STATE.recibosMensais.find(function(x){return x.id===recibosSelecionadoId;});
+      var colaborador = r && STATE.equipeInterna.find(function(p){return p.id===r.colaboradorId;});
+      if(lancamentoTipoSelect.value==='fixo' && colaborador && colaborador.tipo_fixo==='fixo'){
+        form2.descricao.value = 'Fixo pago ';
+        if(colaborador.valor_fixo_quinzenal) form2.valor.value = colaborador.valor_fixo_quinzenal;
+      } else if(lancamentoTipoSelect.value==='minimo_garantido' && colaborador && colaborador.tipo_fixo==='minimo_garantido'){
+        form2.descricao.value = 'Mínimo garantido pago ';
+        if(colaborador.valor_fixo_quinzenal) form2.valor.value = colaborador.valor_fixo_quinzenal;
+      } else if(lancamentoTipoSelect.value==='ajuda_custo'){
+        form2.descricao.value = 'aj de custo';
+      }
     });
     document.querySelectorAll('[data-download]').forEach(function(btn){
       btn.addEventListener('click', function(){
@@ -692,6 +791,53 @@
           window.open(res.data.signedUrl, '_blank');
         });
       });
+    });
+    document.querySelectorAll('[data-painel-fin-tab]').forEach(function(el){
+      el.addEventListener('click', function(){ painelFinTab = el.dataset.painelFinTab; renderContent(); });
+    });
+    document.querySelectorAll('[data-painel-fin-mode]').forEach(function(el){
+      el.addEventListener('click', function(){
+        painelFinMode = el.dataset.painelFinMode;
+        if(painelFinMode==='lista') painelFinContratoId = null;
+        renderContent();
+      });
+    });
+    document.querySelectorAll('[data-reajuste-aviso]').forEach(function(el){
+      el.addEventListener('click', function(){ reajusteAvisoDias = parseInt(el.dataset.reajusteAviso,10); renderContent(); });
+    });
+    document.querySelectorAll('[data-comissao-receber]').forEach(function(el){
+      el.addEventListener('click', function(){
+        el.disabled = true;
+        var c = STATE.comissoes.find(function(x){return x.id===el.dataset.comissaoReceber;});
+        if(!c){ el.disabled=false; return; }
+        sb.from('comissoes').update({ valor_recebido: c.valorPrevisto, status: 'recebido', recebido_em: new Date().toISOString().slice(0,10) })
+          .eq('id', c.id).then(function(res){
+            if(res.error){ el.disabled=false; showToast('Não deu pra atualizar — tente de novo'); return; }
+            showToast('Comissão marcada como recebida');
+            refreshData().then(function(){ renderAppBar(); renderContent(); });
+          });
+      });
+    });
+    document.querySelectorAll('[data-segurado-toggle]').forEach(function(el){
+      el.addEventListener('click', function(){
+        el.disabled = true;
+        sb.from('segurados').update({ situacao: el.dataset.seguradoTo }).eq('id', el.dataset.seguradoToggle).then(function(res){
+          if(res.error){ el.disabled=false; showToast('Não deu pra atualizar — tente de novo'); return; }
+          refreshData().then(function(){ renderAppBar(); renderContent(); });
+        });
+      });
+    });
+    var contratoForm = document.getElementById('novoContratoForm');
+    if(contratoForm) contratoForm.addEventListener('submit', handleNovoContratoSubmit);
+    var seguradoForm = document.getElementById('novoSeguradoForm');
+    if(seguradoForm) seguradoForm.addEventListener('submit', handleNovoSeguradoSubmit);
+    var comissaoForm = document.getElementById('novaComissaoForm');
+    if(comissaoForm) comissaoForm.addEventListener('submit', handleNovaComissaoSubmit);
+    var comissaoContratoSelect = document.getElementById('comissaoContratoSelect');
+    if(comissaoContratoSelect) comissaoContratoSelect.addEventListener('change', function(){
+      var opt = comissaoContratoSelect.selectedOptions[0];
+      var valorInput = document.getElementById('comissaoValorPrevisto');
+      if(opt && valorInput && opt.dataset.valor) valorInput.value = opt.dataset.valor;
     });
   }
 
@@ -833,33 +979,88 @@
 
   function refreshData(){
     var p = perfil.papel;
-    if(p==='vendedor') return Promise.all([fetchLeads(), fetchRecibos()]);
-    if(p==='administrativo') return Promise.all([fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchRecibos()]);
-    if(p==='posvendas') return Promise.all([fetchPosvendas(true), fetchRecibos()]);
+    if(p==='vendedor') return Promise.all([fetchLeads(), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchComissoes()]);
+    if(p==='administrativo') return Promise.all([fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes()]);
+    if(p==='posvendas') return Promise.all([fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos()]);
     if(p==='rh' || p==='cliente') return fetchPosvendas(false);
-    if(p==='gestao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchPosvendas(true), fetchRecibos()]);
-    if(p==='implantacao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchPosvendas(true), fetchRecibos()]);
+    if(p==='gestao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes()]);
+    if(p==='implantacao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos()]);
     return Promise.resolve();
   }
 
-  function fetchRecibos(){
-    return sb.from('recibos').select('*, colaborador:perfis!recibos_colaborador_id_fkey(nome), lancado:perfis!recibos_lancado_por_fkey(nome)').order('created_at', {ascending:false}).then(function(res){
-      if(res.error){ STATE.recibos=[]; return; }
-      STATE.recibos = (res.data||[]).map(function(r){
+  function fetchRecibosMensais(){
+    return sb.from('recibos_mensais').select('*, colaborador:perfis!recibos_mensais_colaborador_id_fkey(nome)').order('referencia_mes', {ascending:false}).then(function(res){
+      if(res.error){ STATE.recibosMensais=[]; return; }
+      STATE.recibosMensais = (res.data||[]).map(function(r){
+        var refDate = new Date(r.referencia_mes+'T00:00:00');
         return {
-          id: r.id, tipo: r.tipo, referencia: r.referencia, valor: r.valor,
-          nomeArquivo: r.nome_arquivo, storagePath: r.storage_path,
-          colaboradorId: r.colaborador_id, colaboradorNome: r.colaborador ? r.colaborador.nome : '—',
-          lancadoPorNome: r.lancado ? r.lancado.nome : '—',
-          criadoEm: fmtDateBR(r.created_at), confirmadoEm: r.confirmado_em ? fmtDateBR(r.confirmado_em) : null
+          id:r.id, colaboradorId:r.colaborador_id, colaboradorNome:(r.colaborador&&r.colaborador.nome)||'—',
+          referenciaMes:r.referencia_mes, referenciaLabel: MESES[refDate.getMonth()]+'/'+refDate.getFullYear(),
+          status:r.status, confirmadoEm: r.confirmado_em ? fmtDateHoraBR(r.confirmado_em) : null
         };
       });
     });
   }
 
+  function fetchRecibosLancamentos(){
+    return sb.from('recibo_lancamentos').select('*').order('semana_inicio', {ascending:true}).then(function(res){
+      STATE.recibosLancamentos = res.error ? [] : (res.data||[]).map(function(r){
+        return { id:r.id, reciboId:r.recibo_id, semanaInicio:r.semana_inicio, semanaFim:r.semana_fim, tipo:r.tipo, descricao:r.descricao, valor:Number(r.valor)||0 };
+      });
+    });
+  }
+
   function fetchEquipeInterna(){
-    return sb.from('perfis').select('id,nome,papel').in('papel', ['vendedor','administrativo','posvendas','gestao','implantacao']).order('nome').then(function(res){
+    return sb.from('perfis').select('id,nome,papel,valor_fixo_quinzenal,tipo_fixo').in('papel', ['vendedor','administrativo','posvendas','gestao','implantacao']).order('nome').then(function(res){
       STATE.equipeInterna = res.error ? [] : (res.data||[]);
+    });
+  }
+
+  function fetchEmpresasAll(){
+    return sb.from('empresas').select('id,nome').order('nome').then(function(res){
+      STATE.empresasAll = res.error ? [] : (res.data||[]);
+    });
+  }
+
+  function fetchContratos(){
+    return sb.from('contratos').select('*, empresas(nome), vendedor:perfis(nome)').eq('status','ativo').order('created_at', {ascending:false}).then(function(res){
+      if(res.error){ STATE.contratos=[]; return; }
+      STATE.contratos = (res.data||[]).map(function(r){
+        return {
+          id:r.id, empresaId:r.empresa_id, empresaNome:(r.empresas && r.empresas.nome)||'—',
+          vendedorId:r.vendedor_id, vendedorNome:(r.vendedor && r.vendedor.nome)||'—',
+          operadora:r.operadora, tipoNegocio:r.tipo_negocio||'—', valorMensal:Number(r.valor_mensal)||0,
+          diaAniversario:r.dia_aniversario, mesAniversario:r.mes_aniversario, status:r.status,
+          dataInicio: fmtDateBR(r.data_inicio)
+        };
+      });
+    });
+  }
+
+  function fetchSegurados(){
+    return sb.from('segurados').select('*, empresas(nome), contratos(operadora)').order('nome').then(function(res){
+      if(res.error){ STATE.segurados=[]; return; }
+      STATE.segurados = (res.data||[]).map(function(r){
+        return {
+          id:r.id, contratoId:r.contrato_id, empresaId:r.empresa_id, empresaNome:(r.empresas && r.empresas.nome)||'—',
+          operadora:(r.contratos && r.contratos.operadora)||'—', nome:r.nome, situacao:r.situacao, observacao:r.observacao||''
+        };
+      });
+    });
+  }
+
+  function fetchComissoes(){
+    return sb.from('comissoes').select('*, empresas(nome), vendedor:perfis(nome)').order('referencia_mes', {ascending:false}).then(function(res){
+      if(res.error){ STATE.comissoes=[]; return; }
+      STATE.comissoes = (res.data||[]).map(function(r){
+        return {
+          id:r.id, contratoId:r.contrato_id, empresaId:r.empresa_id, empresaNome:(r.empresas && r.empresas.nome)||'—',
+          operadora:r.operadora, vendedorId:r.vendedor_id, vendedorNome:(r.vendedor && r.vendedor.nome)||'—',
+          referenciaMes:r.referencia_mes, referenciaLabel: MESES[new Date(r.referencia_mes+'T00:00:00').getMonth()]+'/'+new Date(r.referencia_mes+'T00:00:00').getFullYear(),
+          valorPrevisto:Number(r.valor_previsto)||0, valorRecebido:Number(r.valor_recebido)||0,
+          status:r.status, recebidoEm: r.recebido_em ? fmtDateBR(r.recebido_em) : null
+        };
+      });
     });
   }
 
@@ -889,12 +1090,14 @@
     var ativos = STATE.leads.filter(function(l){return ['fechado','perdido'].indexOf(l.etapa)===-1;});
     var fechados = STATE.leads.filter(function(l){return l.etapa==='fechado';});
     var pipeline = ativos.reduce(function(s,l){return s+l.valor;},0);
+    var comissaoAno = STATE.comissoes.filter(function(c){return c.status==='recebido' && c.referenciaMes.slice(0,4)===String(new Date().getFullYear());}).reduce(function(s,c){return s+c.valorRecebido;},0);
     return '<div class="content-pad">'+
       '<div class="section-label">Seu desempenho</div>'+
       '<div class="stat-grid">'+
         '<div class="stat-tile"><div class="n">'+ativos.length+'</div><div class="l">Leads ativos</div></div>'+
         '<div class="stat-tile"><div class="n">'+fechados.length+'</div><div class="l">Fechados</div></div>'+
         '<div class="stat-tile"><div class="n mono">'+fmtMoney(pipeline)+'</div><div class="l">Em pipeline</div></div>'+
+        '<div class="stat-tile"><div class="n mono">'+fmtMoney(comissaoAno)+'</div><div class="l">Comissão recebida em '+new Date().getFullYear()+'</div></div>'+
       '</div>'+
       '<div class="section-label">Perfil</div>'+
       '<div class="row-card" style="cursor:default"><div class="row-title">'+perfil.nome+'</div>'+
@@ -921,19 +1124,23 @@
     var atrasadasIncl = STATE.inclusaoPropostas.filter(function(t){return t.atrasada;}).length;
     var totalAtrasadas = atrasadasTarefas + atrasadasIncl;
     var inadimplentes = STATE.financeiro.filter(function(t){return t.etapa==='inadimplente';}).length;
+    var pessoasInadimplentes = STATE.segurados.filter(function(s){return s.situacao==='inadimplente';}).length;
     var vigentes = STATE.inclusaoPropostas.filter(function(t){return t.etapa==='vigente';}).length;
+    var mesAtual = new Date().toISOString().slice(0,7);
+    var comissaoMes = STATE.comissoes.filter(function(c){return c.referenciaMes.slice(0,7)===mesAtual;}).reduce(function(s,c){return s+c.valorPrevisto;},0);
     var alertItems = [].concat(
       STATE.tasks.filter(function(t){return t.atrasada;}).map(function(t){return {icon:'alert',tone:'crit',text:'<b>'+t.titulo+'</b> — prazo era '+t.prazo+'.'};}),
       STATE.inclusaoPropostas.filter(function(t){return t.atrasada;}).map(function(t){return {icon:'alert',tone:'crit',text:'Implantação de <b>'+t.empresa+'</b> atrasada (prazo '+t.prazo+').'};}),
-      STATE.financeiro.filter(function(t){return t.etapa==='inadimplente';}).map(function(t){return {icon:'alert',tone:'crit',text:'<b>'+t.empresa+'</b> inadimplente — venceu em '+t.vencimento+'.'};})
+      STATE.financeiro.filter(function(t){return t.etapa==='inadimplente';}).map(function(t){return {icon:'alert',tone:'crit',text:'<b>'+t.empresa+'</b> inadimplente — venceu em '+t.vencimento+'.'};}),
+      STATE.segurados.filter(function(s){return s.situacao==='inadimplente';}).map(function(s){return {icon:'alert',tone:'crit',text:'<b>'+s.nome+'</b> ('+s.empresaNome+') está inadimplente.'};})
     );
     return '<div class="content-pad">'+
       '<div class="section-label">Panorama do administrativo</div>'+
       '<div class="stat-grid">'+
         '<div class="stat-tile"><div class="n" style="color:'+(totalAtrasadas?'var(--critical)':'inherit')+'">'+totalAtrasadas+'</div><div class="l">Itens atrasados</div></div>'+
-        '<div class="stat-tile"><div class="n" style="color:'+(inadimplentes?'var(--critical)':'inherit')+'">'+inadimplentes+'</div><div class="l">Empresas inadimplentes</div></div>'+
+        '<div class="stat-tile"><div class="n" style="color:'+((inadimplentes+pessoasInadimplentes)?'var(--critical)':'inherit')+'">'+inadimplentes+' / '+pessoasInadimplentes+'</div><div class="l">Empresas / pessoas inadimplentes</div></div>'+
         '<div class="stat-tile"><div class="n">'+vigentes+'</div><div class="l">Propostas com vigência ativa</div></div>'+
-        '<div class="stat-tile"><div class="n">'+STATE.inclusaoPropostas.length+'</div><div class="l">Propostas em implantação</div></div>'+
+        '<div class="stat-tile"><div class="n mono">'+fmtMoney(comissaoMes)+'</div><div class="l">Comissão prevista este mês</div></div>'+
       '</div>'+
       '<div class="section-label">Alertas</div>'+
       '<div class="row-card" style="cursor:default">'+(alertItems.length ? alertItems.map(alertRow).join('') : 'Nenhum atraso agora.')+'</div>'+
@@ -1089,93 +1296,533 @@
   }
 
   /* ============== VIEW: Recibos (equipe interna) ============== */
+  var TIPO_LANCAMENTO_LABEL = {
+    fixo:'Fixo', minimo_garantido:'Mínimo garantido', comissao:'Comissão', taxa:'Taxa (desconto)',
+    adesao:'Adesão', split:'Split de venda', ajuda_custo:'Ajuda de custo', outro:'Outro'
+  };
+
+  function toISODate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function fmtDatePtCurto(iso){ var d=new Date(iso+'T00:00:00'); return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0'); }
+  function fmtMoneySigned(n){
+    var sign = n<0 ? '-' : '';
+    return sign+'R$ '+Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  function fmtDateHoraBR(ts){
+    if(!ts) return '—';
+    var d = new Date(ts);
+    if(isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'})+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  }
+  // Semanas segunda-sexta que cobrem o mês inteiro (mesmo recorte usado na
+  // planilha) — a primeira pode começar no mês anterior, a última pode
+  // terminar no mês seguinte.
+  function weeksForMonth(refMesStr){
+    var d = new Date(refMesStr+'T00:00:00');
+    var year = d.getFullYear(), month = d.getMonth()+1;
+    var first = new Date(year, month-1, 1);
+    var last = new Date(year, month, 0);
+    var cur = new Date(first);
+    var dow = cur.getDay();
+    cur.setDate(cur.getDate() + (dow===0 ? -6 : 1-dow));
+    var weeks = [];
+    while(cur <= last){
+      var start = new Date(cur);
+      var end = new Date(cur); end.setDate(end.getDate()+4);
+      weeks.push({ inicio: toISODate(start), fim: toISODate(end) });
+      cur.setDate(cur.getDate()+7);
+    }
+    return weeks;
+  }
+  function lancamentosDoRecibo(reciboId){
+    return STATE.recibosLancamentos.filter(function(l){return l.reciboId===reciboId;});
+  }
+  function totalRecibo(reciboId){
+    return lancamentosDoRecibo(reciboId).reduce(function(s,l){return s+l.valor;},0);
+  }
+
   function viewRecibos(){
-    var podeGerenciar = (perfil.papel==='administrativo' || perfil.papel==='gestao');
-    if(podeGerenciar && recibosMode==='novo') return viewNovoRecibo();
-    var rows = STATE.recibos;
+    var isFinanceiro = (perfil.papel==='administrativo' || perfil.papel==='gestao');
+    if(recibosMode==='novo-mes') return viewNovoRecibosMes();
+    if(recibosMode==='novo-lancamento') return viewNovoLancamento();
+    if(recibosMode==='detalhe') return viewReciboDetalhe();
+    var rows = isFinanceiro ? STATE.recibosMensais : STATE.recibosMensais.filter(function(r){return r.colaboradorId===perfil.id;});
     var html = '<div class="content-pad">'+
       '<div style="display:flex; justify-content:space-between; align-items:center; gap:.6rem; margin-bottom:.7rem">'+
-        '<div class="section-label" style="margin-bottom:0">Recibos'+(podeGerenciar?'':'')+'</div>'+
-        (podeGerenciar ? '<button class="btn btn-primary" style="width:auto" data-recibos-mode="novo">'+ic('plus')+' Novo recibo</button>' : '')+
+        '<div class="section-label" style="margin-bottom:0">Recibos</div>'+
+        (isFinanceiro ? '<button class="btn btn-primary" style="width:auto" data-recibos-mode="novo-mes">'+ic('plus')+' Novo mês</button>' : '')+
       '</div>';
     if(!rows.length){
-      html += '<p class="row-sub">'+(podeGerenciar ? 'Nenhum recibo lançado ainda.' : 'Você ainda não tem recibos por aqui.')+'</p>';
+      html += '<p class="row-sub">'+(isFinanceiro ? 'Nenhum recibo lançado ainda.' : 'Você ainda não tem recibos por aqui.')+'</p>';
     }
     html += rows.map(function(r){
-      var statusChip = r.confirmadoEm
-        ? '<span class="chip chip-ok">'+ic('check')+' Confirmado em '+r.confirmadoEm+'</span>'
+      var statusChip = r.status==='confirmado'
+        ? '<span class="chip chip-ok">'+ic('check')+' Confirmado</span>'
         : '<span class="chip chip-warn">'+ic('clock')+' Aguardando confirmação</span>';
-      var actions = '';
-      if(r.colaboradorId===perfil.id && !r.confirmadoEm){
-        actions += '<button class="btn btn-primary" data-recibo-confirm="'+r.id+'">'+ic('check')+' Confirmar recibo</button>';
-      }
-      if(r.storagePath){
-        actions += '<button class="btn btn-ghost" data-download="'+r.storagePath+'" data-bucket="recibos">'+ic('doc')+' Baixar arquivo</button>';
-      }
-      return '<div class="row-card" style="cursor:default; margin-bottom:.6rem"><div class="row-top">'+
-        '<div><div class="row-title">'+r.referencia+(podeGerenciar ? ' · '+r.colaboradorNome : '')+'</div>'+
-        '<div class="row-sub mono">'+fmtMoney(r.valor)+' · lançado por '+r.lancadoPorNome+' em '+r.criadoEm+'</div></div>'+
-        statusChip+'</div>'+
-        (actions ? '<div class="btn-row">'+actions+'</div>' : '')+
-        '</div>';
+      return '<button class="row-card" data-recibo-abrir="'+r.id+'" style="display:block; width:100%; text-align:left; margin-bottom:.6rem"><div class="row-top">'+
+        '<div><div class="row-title">'+r.referenciaLabel+(isFinanceiro?' · '+r.colaboradorNome:'')+'</div>'+
+        '<div class="row-sub mono">'+fmtMoney(totalRecibo(r.id))+'</div></div>'+
+        statusChip+'</div></button>';
     }).join('');
     html += '</div>';
     return html;
   }
 
-  function viewNovoRecibo(){
+  function viewNovoRecibosMes(){
     if(!STATE.equipeInterna.length) fetchEquipeInterna().then(function(){ if(lastTabByRole[perfil.papel]==='recibos') renderContent(); });
     var opcoes = STATE.equipeInterna.map(function(p){ return '<option value="'+p.id+'">'+p.nome+'</option>'; }).join('');
+    var mesDefault = new Date().toISOString().slice(0,7);
     return '<div class="content-pad">'+
-      '<div class="section-label">Lançar novo recibo</div>'+
-      '<form id="novoReciboForm">'+
-        '<div class="field"><label>Colaborador</label><select name="colaborador" required>'+
-          '<option value="">Selecione...</option>'+opcoes+'</select></div>'+
-        '<div class="field"><label>Tipo</label><select name="tipo"><option value="comissao">Comissão</option><option value="outro">Outro</option></select></div>'+
-        '<div class="field"><label>Referência</label><input type="text" name="referencia" placeholder="Ex: Setembro/2026" required /></div>'+
-        '<div class="field"><label>Valor (R$)</label><input type="number" name="valor" step="0.01" min="0" placeholder="0,00" required /></div>'+
-        '<div class="field"><label>Arquivo do recibo (opcional)</label>'+
-          '<label class="attach-mock" for="novoReciboFile">'+ic('upload')+'<span id="reciboAttachLabel">Toque para anexar o PDF do recibo</span></label>'+
-          '<input type="file" id="novoReciboFile" hidden />'+
-          '<span class="attach-chip" id="reciboAttachChip" style="display:none">'+ic('paperclip')+'<span></span></span>'+
-        '</div>'+
+      '<div class="section-label">Novo recibo do mês</div>'+
+      '<form id="novoRecibosMesForm">'+
+        '<div class="field"><label>Pessoa</label><select name="colaborador" required><option value="">Selecione...</option>'+opcoes+'</select></div>'+
+        '<div class="field"><label>Mês</label><input type="month" name="mes" value="'+mesDefault+'" required /></div>'+
         '<div class="btn-row">'+
-          '<button type="submit" class="btn btn-primary">'+ic('plus')+' Lançar recibo</button>'+
+          '<button type="submit" class="btn btn-primary">'+ic('plus')+' Criar / abrir</button>'+
           '<button type="button" class="btn btn-ghost" data-recibos-mode="lista">Cancelar</button>'+
         '</div>'+
       '</form></div>';
   }
 
-  function handleNovoReciboSubmit(e){
+  function handleNovoRecibosMesSubmit(e){
     e.preventDefault();
     var form = e.target;
     var colaboradorId = form.colaborador.value;
-    var tipo = form.tipo.value;
-    var referencia = form.referencia.value.trim();
-    var valor = parseFloat(form.valor.value || '0');
-    var fileInput = document.getElementById('novoReciboFile');
-    var file = fileInput && fileInput.files && fileInput.files[0];
-    if(!colaboradorId || !referencia){ showToast('Preencha colaborador e referência'); return; }
+    var mes = form.mes.value;
+    if(!colaboradorId || !mes){ showToast('Escolha a pessoa e o mês'); return; }
+    var existente = STATE.recibosMensais.find(function(r){ return r.colaboradorId===colaboradorId && r.referenciaMes.slice(0,7)===mes; });
+    if(existente){
+      recibosSelecionadoId = existente.id;
+      recibosMode = 'detalhe';
+      renderContent();
+      return;
+    }
     var btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
-    sb.from('recibos').insert({
-      colaborador_id: colaboradorId, tipo: tipo, referencia: referencia, valor: valor, lancado_por: perfil.id
-    }).select().single().then(function(res){
-      if(res.error){ btn.disabled=false; showToast('Não deu pra lançar — tente de novo'); return; }
-      var row = res.data;
-      var afterUpload = file
-        ? sb.storage.from('recibos').upload(row.id+'/'+Date.now()+'_'+file.name, file).then(function(upRes){
-            if(upRes.error) return;
-            return sb.from('recibos').update({ nome_arquivo: file.name, storage_path: upRes.data.path }).eq('id', row.id);
-          })
-        : Promise.resolve();
-      afterUpload.then(function(){
-        showToast('Recibo lançado');
-        recibosMode = 'lista';
-        refreshData().then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); btn.disabled=false; });
+    sb.from('recibos_mensais').insert({ colaborador_id: colaboradorId, referencia_mes: mes+'-01', lancado_por: perfil.id })
+      .select().single().then(function(res){
+        if(res.error){ btn.disabled=false; showToast('Não deu pra criar — tente de novo'); return; }
+        recibosSelecionadoId = res.data.id;
+        recibosMode = 'detalhe';
+        refreshData().then(function(){ renderContent(); btn.disabled=false; });
       });
+  }
+
+  function viewReciboDetalhe(){
+    var r = STATE.recibosMensais.find(function(x){return x.id===recibosSelecionadoId;});
+    if(!r){ recibosMode='lista'; return viewRecibos(); }
+    var isFinanceiro = (perfil.papel==='administrativo' || perfil.papel==='gestao');
+    var souDono = r.colaboradorId===perfil.id;
+    var lancamentos = lancamentosDoRecibo(r.id);
+    var weeks = weeksForMonth(r.referenciaMes);
+    var total = lancamentos.reduce(function(s,l){return s+l.valor;},0);
+    var ultimoDia = new Date(new Date(r.referenciaMes+'T00:00:00').getFullYear(), new Date(r.referenciaMes+'T00:00:00').getMonth()+1, 0);
+
+    var semanasHtml = weeks.map(function(w){
+      var itens = lancamentos.filter(function(l){return l.semanaInicio===w.inicio;});
+      var subtotal = itens.reduce(function(s,l){return s+l.valor;},0);
+      var itensHtml = itens.map(function(l){
+        return '<div class="recibo-linha"><span>'+l.descricao+'</span><span class="mono">'+fmtMoneySigned(l.valor)+'</span>'+
+          (isFinanceiro && r.status==='aberto' ? '<button class="recibo-linha-del" data-lancamento-del="'+l.id+'" title="Remover">×</button>' : '')+
+        '</div>';
+      }).join('');
+      return '<div class="recibo-semana">'+
+        '<div class="recibo-semana-head">recebido '+fmtDatePtCurto(w.inicio)+' - '+fmtDatePtCurto(w.fim)+'</div>'+
+        itensHtml+
+        '<div class="recibo-linha recibo-subtotal"><span>SUBTOTAL recebido na semana</span><span class="mono">'+fmtMoneySigned(subtotal)+'</span></div>'+
+      '</div>';
+    }).join('');
+
+    var footer = r.status==='confirmado'
+      ? '<div class="recibo-assinatura ok">'+ic('check')+' Confirmado digitalmente por '+r.colaboradorNome+' em '+r.confirmadoEm+'</div>'
+      : (souDono
+          ? '<div class="btn-row"><button class="btn btn-primary" data-recibo-confirmar="'+r.id+'">'+ic('check')+' Confirmar recebimento</button></div>'
+          : '<div class="recibo-assinatura">'+ic('clock')+' Aguardando confirmação de '+r.colaboradorNome+'</div>');
+
+    var acoesFinanceiro = (isFinanceiro && r.status==='aberto')
+      ? '<div class="btn-row"><button class="btn btn-primary" data-recibos-mode="novo-lancamento">'+ic('plus')+' Novo lançamento</button></div>' : '';
+    var reabrir = (isFinanceiro && r.status==='confirmado')
+      ? '<button class="btn btn-ghost" data-recibo-reabrir="'+r.id+'" style="margin-top:.5rem">Reabrir recibo</button>' : '';
+
+    return '<div class="content-pad">'+
+      '<button class="btn btn-ghost" style="width:auto; margin-bottom:.7rem" data-recibos-mode="lista">'+ic('chev')+' Voltar</button>'+
+      '<div class="recibo-doc">'+
+        '<div class="recibo-doc-head"><span>RECIBO Nº '+r.referenciaMes.slice(0,7).replace('-','.')+'</span><span>VALOR</span></div>'+
+        '<div class="recibo-doc-sub">Recebi(emos) de: <b>Corretora de Seguros Panacea</b></div>'+
+        semanasHtml+
+        '<div class="recibo-linha recibo-total"><span>TOTAL</span><span class="mono">'+fmtMoney(total)+'</span></div>'+
+        '<div class="recibo-doc-foot">'+
+          '<div class="row-sub">São Paulo, '+ultimoDia.getDate()+' de '+MESES[ultimoDia.getMonth()]+' de '+ultimoDia.getFullYear()+'</div>'+
+          '<div style="margin-top:.3rem">Nome: <b>'+r.colaboradorNome+'</b> · CNPJ: —</div>'+
+          '<div class="row-sub" style="margin:.4rem 0">Prestação de serviços como promoção de vendas, contatos comerciais, entre outras atividades. 1x ao mês emitir Nota para a PANACEA dos valores recebidos totais.</div>'+
+          footer+
+        '</div>'+
+      '</div>'+
+      acoesFinanceiro+reabrir+
+    '</div>';
+  }
+
+  function viewNovoLancamento(){
+    var r = STATE.recibosMensais.find(function(x){return x.id===recibosSelecionadoId;});
+    if(!r){ recibosMode='lista'; return viewRecibos(); }
+    if(!STATE.equipeInterna.length) fetchEquipeInterna().then(function(){ if(recibosMode==='novo-lancamento') renderContent(); });
+    var weeks = weeksForMonth(r.referenciaMes);
+    var weekOpts = weeks.map(function(w){ return '<option value="'+w.inicio+'|'+w.fim+'">'+fmtDatePtCurto(w.inicio)+' - '+fmtDatePtCurto(w.fim)+'</option>'; }).join('');
+    var tipoOpts = Object.keys(TIPO_LANCAMENTO_LABEL).map(function(k){ return '<option value="'+k+'"'+(k==='outro'?' selected':'')+'>'+TIPO_LANCAMENTO_LABEL[k]+'</option>'; }).join('');
+    return '<div class="content-pad">'+
+      '<div class="section-label">Novo lançamento — '+r.colaboradorNome+' · '+r.referenciaLabel+'</div>'+
+      '<form id="novoLancamentoForm">'+
+        '<div class="field"><label>Semana</label><select name="semana" required>'+weekOpts+'</select></div>'+
+        '<div class="field"><label>Tipo</label><select name="tipo" id="lancamentoTipo">'+tipoOpts+'</select></div>'+
+        '<div class="field"><label>Descrição</label><input type="text" name="descricao" placeholder="Ex: PORTO SAUDE PME - Cliente X" required /></div>'+
+        '<div class="field"><label>Valor (R$) — use negativo pra desconto/taxa</label><input type="number" name="valor" step="0.01" placeholder="0,00" required /></div>'+
+        '<div class="btn-row">'+
+          '<button type="submit" class="btn btn-primary">'+ic('plus')+' Lançar</button>'+
+          '<button type="button" class="btn btn-ghost" data-recibos-mode="detalhe">Cancelar</button>'+
+        '</div>'+
+      '</form></div>';
+  }
+
+  function handleNovoLancamentoSubmit(e){
+    e.preventDefault();
+    var form = e.target;
+    var semanaParts = form.semana.value.split('|');
+    var tipo = form.tipo.value;
+    var descricao = form.descricao.value.trim();
+    var valor = parseFloat(form.valor.value || '0');
+    if(!descricao || isNaN(valor)){ showToast('Preencha descrição e valor'); return; }
+    var btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    sb.from('recibo_lancamentos').insert({
+      recibo_id: recibosSelecionadoId, semana_inicio: semanaParts[0], semana_fim: semanaParts[1],
+      tipo: tipo, descricao: descricao, valor: valor
+    }).then(function(res){
+      if(res.error){ btn.disabled=false; showToast('Não deu pra lançar — tente de novo'); return; }
+      showToast('Lançamento adicionado');
+      recibosMode = 'detalhe';
+      refreshData().then(function(){ renderContent(); btn.disabled=false; });
     });
   }
+
+  /* ============== VIEW: Painéis do financeiro (comissões, reajuste, inadimplência) ============== */
+  function viewPaineisFinanceiro(){
+    if(painelFinMode==='novo-contrato') return viewNovoContrato();
+    if(painelFinMode==='novo-segurado') return viewNovoSegurado();
+    if(painelFinMode==='nova-comissao') return viewNovaComissao();
+    var chips = PAINEL_FIN_TABS.map(function(t){
+      return '<button class="chip '+(painelFinTab===t.k?'chip-gold':'chip-neutral')+'" style="border:none;cursor:pointer" data-painel-fin-tab="'+t.k+'">'+t.l+'</button>';
+    }).join(' ');
+    var body = '';
+    if(painelFinTab==='comissoes') body = viewPainelComissoes();
+    else if(painelFinTab==='reajustes') body = viewPainelReajustes();
+    else if(painelFinTab==='vendedores') body = viewPainelVendedores();
+    else if(painelFinTab==='inadimplencia') body = viewPainelInadimplencia();
+    return '<div style="padding:14px 16px 0"><div class="section-label" style="margin-bottom:.5rem">Painéis do financeiro</div>'+
+      '<div style="display:flex;gap:.4rem;margin-bottom:.3rem;flex-wrap:wrap">'+chips+'</div></div>'+body;
+  }
+
+  function barChartHtml(items){
+    // items: [{label, previsto, recebido}]
+    if(!items.length) return '<div class="empty-col">Nada lançado ainda.</div>';
+    var maxValor = Math.max(1, items.reduce(function(m,it){return Math.max(m, it.previsto, it.recebido);},0));
+    return '<div class="bar-legend"><span><span class="sw" style="background:var(--teal-900)"></span>Recebido</span><span><span class="sw" style="background:var(--warning-tint)"></span>Previsto</span></div>'+
+      items.map(function(it){
+        var pctPrevisto = Math.round((it.previsto/maxValor)*100);
+        var pctRecebido = Math.round((it.recebido/maxValor)*100);
+        return '<div class="bar-row"><div class="bar-label" title="'+it.label+'">'+it.label+'</div>'+
+          '<div class="bar-track"><div class="bar-fill-prev" style="width:'+pctPrevisto+'%"></div><div class="bar-fill-rec" style="width:'+pctRecebido+'%"></div></div>'+
+          '<div class="bar-vals mono">'+fmtMoney(it.recebido)+'</div></div>';
+      }).join('');
+  }
+
+  function viewPainelComissoes(){
+    var porOperadora = {};
+    STATE.comissoes.forEach(function(c){
+      if(!porOperadora[c.operadora]) porOperadora[c.operadora] = {previsto:0, recebido:0};
+      porOperadora[c.operadora].previsto += c.valorPrevisto;
+      porOperadora[c.operadora].recebido += c.valorRecebido;
+    });
+    var itens = Object.keys(porOperadora).sort(function(a,b){ return porOperadora[b].previsto - porOperadora[a].previsto; })
+      .map(function(o){ return {label:o, previsto:porOperadora[o].previsto, recebido:porOperadora[o].recebido}; });
+
+    var rows = STATE.comissoes.slice(0, 40);
+    var listHtml = rows.length ? rows.map(function(c){
+      var statusChip = c.status==='recebido'
+        ? '<span class="chip chip-ok">'+ic('check')+' Recebido em '+c.recebidoEm+'</span>'
+        : c.status==='atrasado'
+          ? '<span class="chip chip-crit">'+ic('alert')+' Atrasado</span>'
+          : '<span class="chip chip-warn">'+ic('clock')+' Previsto</span>';
+      var actions = c.status!=='recebido' ? '<button class="btn btn-primary" data-comissao-receber="'+c.id+'">'+ic('check')+' Marcar recebido</button>' : '';
+      return '<div class="row-card" style="cursor:default; margin-bottom:.6rem"><div class="row-top">'+
+        '<div><div class="row-title">'+c.operadora+' · '+c.empresaNome+'</div>'+
+        '<div class="row-sub mono">'+c.referenciaLabel+' · '+fmtMoney(c.valorPrevisto)+(c.vendedorNome!=='—'?' · '+c.vendedorNome:'')+'</div></div>'+
+        statusChip+'</div>'+(actions?'<div class="btn-row">'+actions+'</div>':'')+'</div>';
+    }).join('') : '<div class="empty-col">Nenhum lançamento ainda.</div>';
+
+    return '<div class="content-pad">'+
+      '<div style="display:flex; justify-content:space-between; align-items:center; gap:.6rem; margin-bottom:.7rem">'+
+        '<div class="section-label" style="margin-bottom:0">Previsto × recebido por operadora</div>'+
+        '<button class="btn btn-primary" style="width:auto" data-painel-fin-mode="nova-comissao">'+ic('plus')+' Nova comissão</button>'+
+      '</div>'+
+      '<div class="row-card" style="cursor:default; margin-bottom:1rem">'+barChartHtml(itens)+'</div>'+
+      '<div class="section-label">Lançamentos recentes</div>'+
+      listHtml+
+    '</div>';
+  }
+
+  function viewPainelReajustes(){
+    var sorted = STATE.contratos.slice().sort(function(a,b){
+      return diasAteAniversario(a.diaAniversario,a.mesAniversario) - diasAteAniversario(b.diaAniversario,b.mesAniversario);
+    });
+    var avisoChips = [15,30,60,90].map(function(n){
+      return '<button class="chip '+(reajusteAvisoDias===n?'chip-gold':'chip-neutral')+'" style="border:none;cursor:pointer" data-reajuste-aviso="'+n+'">'+n+'d</button>';
+    }).join(' ');
+    var dentroDoAviso = sorted.filter(function(c){ return diasAteAniversario(c.diaAniversario,c.mesAniversario) <= reajusteAvisoDias; }).length;
+    var listHtml = sorted.length ? sorted.map(function(c){
+      var dias = diasAteAniversario(c.diaAniversario,c.mesAniversario);
+      var cls = dias<=7 ? 'chip-crit' : dias<=reajusteAvisoDias ? 'chip-warn' : 'chip-ok';
+      return '<button class="row-card" data-open="contrato:'+c.id+'" style="margin-bottom:.6rem; display:block; width:100%; text-align:left"><div class="row-top">'+
+        '<div><div class="row-title">'+c.empresaNome+' · '+c.operadora+'</div>'+
+        '<div class="row-sub mono">'+fmtMoney(c.valorMensal)+'/mês · aniversário dia '+c.diaAniversario+' de '+MESES[c.mesAniversario-1]+'</div></div>'+
+        '<span class="chip '+cls+'">'+ic('clock')+' em '+dias+'d</span></div></button>';
+    }).join('') : '<div class="empty-col">Nenhum contrato cadastrado ainda.</div>';
+
+    return '<div class="content-pad">'+
+      '<div style="display:flex; justify-content:space-between; align-items:center; gap:.6rem; margin-bottom:.5rem">'+
+        '<div class="section-label" style="margin-bottom:0">Calendário de reajuste</div>'+
+        '<button class="btn btn-primary" style="width:auto" data-painel-fin-mode="novo-contrato">'+ic('plus')+' Novo contrato</button>'+
+      '</div>'+
+      '<p class="row-sub" style="margin-bottom:.5rem">Avisar com quantos dias de antecedência?</p>'+
+      '<div style="display:flex;gap:.4rem;margin-bottom:.8rem;flex-wrap:wrap">'+avisoChips+'</div>'+
+      (dentroDoAviso ? '<div class="pending-banner">'+ic('alert')+'<span>'+dentroDoAviso+' contrato(s) fazendo aniversário nos próximos '+reajusteAvisoDias+' dias.</span></div>' : '')+
+      '<div class="section-label" style="margin-top:.8rem">Contratos ativos</div>'+
+      listHtml+
+    '</div>';
+  }
+
+  function viewPainelVendedores(){
+    var porVendedor = {};
+    STATE.comissoes.forEach(function(c){
+      var key = c.vendedorId || '—';
+      if(!porVendedor[key]) porVendedor[key] = {nome:c.vendedorNome, previsto:0, recebido:0};
+      porVendedor[key].previsto += c.valorPrevisto;
+      porVendedor[key].recebido += c.valorRecebido;
+    });
+    var itens = Object.keys(porVendedor).sort(function(a,b){ return porVendedor[b].recebido - porVendedor[a].recebido; })
+      .map(function(k){ return {label:porVendedor[k].nome, previsto:porVendedor[k].previsto, recebido:porVendedor[k].recebido}; });
+    return '<div class="content-pad">'+
+      '<div class="section-label">Comissão gerada por vendedor</div>'+
+      '<p class="row-sub" style="margin-bottom:.7rem">Soma das comissões vinculadas aos contratos de cada vendedor.</p>'+
+      '<div class="row-card" style="cursor:default">'+barChartHtml(itens)+'</div>'+
+    '</div>';
+  }
+
+  function viewPainelInadimplencia(){
+    var porEmpresa = {};
+    STATE.segurados.forEach(function(s){
+      if(!porEmpresa[s.empresaNome]) porEmpresa[s.empresaNome] = [];
+      porEmpresa[s.empresaNome].push(s);
+    });
+    var empresas = Object.keys(porEmpresa).sort();
+    var totalInadimplentes = STATE.segurados.filter(function(s){return s.situacao==='inadimplente';}).length;
+    var empresasInadimplentes = STATE.financeiro.filter(function(t){return t.etapa==='inadimplente';}).length;
+
+    var html = empresas.length ? empresas.map(function(emp){
+      var pessoas = porEmpresa[emp];
+      var inad = pessoas.filter(function(p){return p.situacao==='inadimplente';}).length;
+      return '<div class="row-card" style="cursor:default; margin-bottom:.6rem"><div class="row-top">'+
+        '<div><div class="row-title">'+ic('building')+' '+emp+'</div><div class="row-sub">'+pessoas.length+' pessoa(s) segurada(s)</div></div>'+
+        '<span class="chip '+(inad?'chip-crit':'chip-ok')+'">'+inad+' inadimplente(s)</span></div>'+
+        '<div style="margin-top:.5rem; display:flex; flex-direction:column; gap:.4rem">'+
+        pessoas.map(function(p){
+          var toggleTo = p.situacao==='inadimplente' ? 'ativo' : 'inadimplente';
+          var toggleLabel = p.situacao==='inadimplente' ? 'Marcar como ativo' : 'Marcar inadimplente';
+          return '<div style="display:flex; justify-content:space-between; align-items:center; gap:.5rem; padding:.4rem .5rem; background:var(--surface-2); border-radius:8px">'+
+            '<div style="font-size:.8rem"><b>'+p.nome+'</b> <span class="row-sub" style="display:inline">· '+p.operadora+'</span></div>'+
+            '<button class="chip '+(p.situacao==='inadimplente'?'chip-crit':'chip-ok')+'" style="border:none;cursor:pointer" data-segurado-toggle="'+p.id+'" data-segurado-to="'+toggleTo+'">'+toggleLabel+'</button>'+
+          '</div>';
+        }).join('')+
+        '</div></div>';
+    }).join('') : '<div class="empty-col">Nenhuma pessoa segurada cadastrada ainda.</div>';
+
+    return '<div class="content-pad">'+
+      '<div class="stat-grid">'+
+        '<div class="stat-tile"><div class="n" style="color:'+(empresasInadimplentes?'var(--critical)':'inherit')+'">'+empresasInadimplentes+'</div><div class="l">Empresas inadimplentes</div></div>'+
+        '<div class="stat-tile"><div class="n" style="color:'+(totalInadimplentes?'var(--critical)':'inherit')+'">'+totalInadimplentes+'</div><div class="l">Pessoas inadimplentes</div></div>'+
+      '</div>'+
+      '<div style="display:flex; justify-content:space-between; align-items:center; gap:.6rem; margin-bottom:.5rem">'+
+        '<div class="section-label" style="margin-bottom:0">Por pessoa segurada</div>'+
+        '<button class="btn btn-primary" style="width:auto" data-painel-fin-mode="novo-segurado">'+ic('plus')+' Nova pessoa</button>'+
+      '</div>'+
+      html+
+    '</div>';
+  }
+
+  function viewNovoContrato(){
+    if(!STATE.empresasAll.length) fetchEmpresasAll().then(function(){ if(lastTabByRole[perfil.papel]==='paineis') renderContent(); });
+    if(!STATE.equipeInterna.length) fetchEquipeInterna().then(function(){ if(lastTabByRole[perfil.papel]==='paineis') renderContent(); });
+    var empresaOpts = STATE.empresasAll.map(function(e){ return '<option value="'+e.id+'">'+e.nome+'</option>'; }).join('');
+    var vendedorOpts = STATE.equipeInterna.filter(function(p){return p.papel==='vendedor';})
+      .map(function(p){ return '<option value="'+p.id+'">'+p.nome+'</option>'; }).join('');
+    var mesOpts = MESES.map(function(m,i){ return '<option value="'+(i+1)+'">'+m+'</option>'; }).join('');
+    return '<div class="content-pad">'+
+      '<div class="section-label">Novo contrato / apólice</div>'+
+      '<form id="novoContratoForm">'+
+        '<div class="field"><label>Empresa</label><select name="empresa" required><option value="">Selecione...</option>'+empresaOpts+'</select></div>'+
+        '<div class="field"><label>Operadora</label><input type="text" name="operadora" placeholder="Ex: SulAmérica" required /></div>'+
+        '<div class="field"><label>Vendedor responsável</label><select name="vendedor"><option value="">— nenhum —</option>'+vendedorOpts+'</select></div>'+
+        '<div class="field"><label>Tipo de negócio</label><input type="text" name="tipoNegocio" placeholder="Ex: Saúde PME" /></div>'+
+        '<div class="field"><label>Valor mensal (R$)</label><input type="number" name="valorMensal" step="0.01" min="0" placeholder="0,00" required /></div>'+
+        '<div class="field"><label>Dia do aniversário</label><input type="number" name="dia" min="1" max="31" placeholder="Ex: 15" required /></div>'+
+        '<div class="field"><label>Mês do aniversário</label><select name="mes" required><option value="">Selecione...</option>'+mesOpts+'</select></div>'+
+        '<div class="btn-row">'+
+          '<button type="submit" class="btn btn-primary">'+ic('plus')+' Salvar contrato</button>'+
+          '<button type="button" class="btn btn-ghost" data-painel-fin-mode="lista">Cancelar</button>'+
+        '</div>'+
+      '</form></div>';
+  }
+
+  function handleNovoContratoSubmit(e){
+    e.preventDefault();
+    var form = e.target;
+    var empresaId = form.empresa.value;
+    var operadora = form.operadora.value.trim();
+    var vendedorId = form.vendedor.value || null;
+    var tipoNegocio = form.tipoNegocio.value.trim();
+    var valorMensal = parseFloat(form.valorMensal.value || '0');
+    var dia = parseInt(form.dia.value, 10);
+    var mes = parseInt(form.mes.value, 10);
+    if(!empresaId || !operadora || !dia || !mes){ showToast('Preencha empresa, operadora e a data de aniversário'); return; }
+    var btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    sb.from('contratos').insert({
+      empresa_id: empresaId, operadora: operadora, vendedor_id: vendedorId, tipo_negocio: tipoNegocio || null,
+      valor_mensal: valorMensal, dia_aniversario: dia, mes_aniversario: mes
+    }).then(function(res){
+      if(res.error){ btn.disabled=false; showToast('Não deu pra salvar — tente de novo'); return; }
+      showToast('Contrato salvo');
+      painelFinMode = 'lista'; painelFinTab = 'reajustes';
+      refreshData().then(function(){ renderAppBar(); renderContent(); btn.disabled=false; });
+    });
+  }
+
+  function viewNovoSegurado(){
+    var opcoes = STATE.contratos.map(function(c){
+      return '<option value="'+c.id+'"'+(c.id===painelFinContratoId?' selected':'')+'>'+c.empresaNome+' · '+c.operadora+'</option>';
+    }).join('');
+    return '<div class="content-pad">'+
+      '<div class="section-label">Nova pessoa segurada</div>'+
+      (STATE.contratos.length ? '' : '<p class="row-sub" style="margin-bottom:.7rem">Cadastre um contrato primeiro, na aba "Reajustes".</p>')+
+      '<form id="novoSeguradoForm">'+
+        '<div class="field"><label>Contrato</label><select name="contrato" required><option value="">Selecione...</option>'+opcoes+'</select></div>'+
+        '<div class="field"><label>Nome</label><input type="text" name="nome" placeholder="Nome completo" required /></div>'+
+        '<div class="btn-row">'+
+          '<button type="submit" class="btn btn-primary" '+(STATE.contratos.length?'':'disabled')+'>'+ic('plus')+' Salvar</button>'+
+          '<button type="button" class="btn btn-ghost" data-painel-fin-mode="lista">Cancelar</button>'+
+        '</div>'+
+      '</form></div>';
+  }
+
+  function handleNovoSeguradoSubmit(e){
+    e.preventDefault();
+    var form = e.target;
+    var contratoId = form.contrato.value;
+    var nome = form.nome.value.trim();
+    if(!contratoId || !nome){ showToast('Preencha contrato e nome'); return; }
+    var contrato = STATE.contratos.find(function(c){return c.id===contratoId;});
+    if(!contrato) return;
+    var btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    sb.from('segurados').insert({ contrato_id: contratoId, empresa_id: contrato.empresaId, nome: nome }).then(function(res){
+      if(res.error){ btn.disabled=false; showToast('Não deu pra salvar — tente de novo'); return; }
+      showToast('Pessoa segurada cadastrada');
+      painelFinContratoId = null;
+      painelFinMode = 'lista'; painelFinTab = 'inadimplencia';
+      refreshData().then(function(){ renderAppBar(); renderContent(); btn.disabled=false; });
+    });
+  }
+
+  function viewNovaComissao(){
+    var opcoes = STATE.contratos.map(function(c){
+      return '<option value="'+c.id+'" data-valor="'+c.valorMensal+'"'+(c.id===painelFinContratoId?' selected':'')+'>'+c.empresaNome+' · '+c.operadora+'</option>';
+    }).join('');
+    var mesDefault = new Date().toISOString().slice(0,7);
+    var valorInicial = '';
+    if(painelFinContratoId){
+      var c0 = STATE.contratos.find(function(c){return c.id===painelFinContratoId;});
+      if(c0) valorInicial = c0.valorMensal;
+    }
+    return '<div class="content-pad">'+
+      '<div class="section-label">Nova comissão</div>'+
+      (STATE.contratos.length ? '' : '<p class="row-sub" style="margin-bottom:.7rem">Cadastre um contrato primeiro, na aba "Reajustes".</p>')+
+      '<form id="novaComissaoForm">'+
+        '<div class="field"><label>Contrato</label><select name="contrato" id="comissaoContratoSelect" required><option value="">Selecione...</option>'+opcoes+'</select></div>'+
+        '<div class="field"><label>Mês de referência</label><input type="month" name="referencia" value="'+mesDefault+'" required /></div>'+
+        '<div class="field"><label>Valor previsto (R$)</label><input type="number" name="valorPrevisto" id="comissaoValorPrevisto" step="0.01" min="0" value="'+valorInicial+'" placeholder="0,00" required /></div>'+
+        '<div class="btn-row">'+
+          '<button type="submit" class="btn btn-primary" '+(STATE.contratos.length?'':'disabled')+'>'+ic('plus')+' Lançar comissão</button>'+
+          '<button type="button" class="btn btn-ghost" data-painel-fin-mode="lista">Cancelar</button>'+
+        '</div>'+
+      '</form></div>';
+  }
+
+  function handleNovaComissaoSubmit(e){
+    e.preventDefault();
+    var form = e.target;
+    var contratoId = form.contrato.value;
+    var referencia = form.referencia.value;
+    var valorPrevisto = parseFloat(form.valorPrevisto.value || '0');
+    if(!contratoId || !referencia){ showToast('Preencha contrato e mês de referência'); return; }
+    var contrato = STATE.contratos.find(function(c){return c.id===contratoId;});
+    if(!contrato) return;
+    var btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    sb.from('comissoes').insert({
+      contrato_id: contratoId, empresa_id: contrato.empresaId, operadora: contrato.operadora,
+      vendedor_id: contrato.vendedorId, referencia_mes: referencia+'-01', valor_previsto: valorPrevisto
+    }).then(function(res){
+      if(res.error){ btn.disabled=false; showToast('Não deu pra lançar — tente de novo'); return; }
+      showToast('Comissão lançada');
+      painelFinContratoId = null;
+      painelFinMode = 'lista'; painelFinTab = 'comissoes';
+      refreshData().then(function(){ renderAppBar(); renderContent(); btn.disabled=false; });
+    });
+  }
+
+  function openContratoDetail(id){
+    var c = STATE.contratos.find(function(x){return x.id===id;});
+    if(!c) return;
+    var dias = diasAteAniversario(c.diaAniversario, c.mesAniversario);
+    var pessoas = STATE.segurados.filter(function(s){return s.contratoId===id;});
+    var html = '<h3>'+c.empresaNome+'</h3><p class="row-sub" style="margin-bottom:.7rem">'+c.operadora+(c.tipoNegocio&&c.tipoNegocio!=='—'?' · '+c.tipoNegocio:'')+'</p>'+
+      '<div class="kv"><span class="k">Valor mensal</span><span class="v mono">'+fmtMoney(c.valorMensal)+'</span></div>'+
+      '<div class="kv"><span class="k">Vendedor</span><span class="v">'+c.vendedorNome+'</span></div>'+
+      '<div class="kv"><span class="k">Início</span><span class="v">'+c.dataInicio+'</span></div>'+
+      '<div class="kv"><span class="k">Aniversário</span><span class="v">dia '+c.diaAniversario+' de '+MESES[c.mesAniversario-1]+' (em '+dias+'d)</span></div>'+
+      '<div class="section-label" style="margin-top:1rem">Pessoas seguradas ('+pessoas.length+')</div>'+
+      (pessoas.length ? pessoas.map(function(p){
+        return '<div class="kv"><span class="k">'+p.nome+'</span><span class="v"><span class="chip '+(p.situacao==='inadimplente'?'chip-crit':p.situacao==='cancelado'?'chip-neutral':'chip-ok')+'">'+p.situacao+'</span></span></div>';
+      }).join('') : '<p class="row-sub">Nenhuma cadastrada ainda.</p>')+
+      '<div class="btn-row">'+
+        '<button class="btn btn-primary" onclick="window.__panaceaLancarComissao(\''+id+'\')">'+ic('coin')+' Lançar comissão deste mês</button>'+
+        '<button class="btn btn-ghost" onclick="window.__panaceaNovoSegurado(\''+id+'\')">'+ic('plus')+' Adicionar pessoa segurada</button>'+
+      '</div>';
+    openSheet(html);
+  }
+
+  window.__panaceaLancarComissao = function(contratoId){
+    closeSheet();
+    painelFinContratoId = contratoId;
+    painelFinMode = 'nova-comissao';
+    lastTabByRole[perfil.papel] = 'paineis';
+    renderAppBar(); renderBottomTabbar(); renderContent();
+  };
+  window.__panaceaNovoSegurado = function(contratoId){
+    closeSheet();
+    painelFinContratoId = contratoId;
+    painelFinMode = 'novo-segurado';
+    lastTabByRole[perfil.papel] = 'paineis';
+    renderAppBar(); renderBottomTabbar(); renderContent();
+  };
 
   function viewDesempenhoRH(){
     return '<div class="content-pad"><div class="section-label">Desempenho — '+(perfil.empresaNome||'')+'</div>'+
@@ -1239,6 +1886,7 @@
     if(type==='fin') return openFinDetail(id);
     if(type==='pv') return openPvDetail(id, true);
     if(type==='pv-ext') return openPvDetail(id, false);
+    if(type==='contrato') return openContratoDetail(id);
   }
 
   function timelineHtml(hist){
