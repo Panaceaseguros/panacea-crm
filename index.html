@@ -283,6 +283,10 @@
     {key:'novo', label:'Novo lead'},{key:'contato', label:'Contato feito'},{key:'proposta', label:'Proposta enviada'},
     {key:'negociacao', label:'Negociação'},{key:'fechado', label:'Fechado ✓'},{key:'perdido', label:'Perdido'}
   ];
+  var MOTIVO_PERDA_LABEL = {
+    preco:'Preço', concorrente:'Foi para o concorrente', sumiu:'Cliente sumiu / sem resposta',
+    sem_fit:'Não era o momento / sem fit', outro:'Outro'
+  };
   var TASK_STAGES = [
     {key:'afazer', label:'A fazer'},{key:'andamento', label:'Em andamento'},{key:'aguardando', label:'Aguardando terceiros'},{key:'concluido', label:'Concluído'}
   ];
@@ -378,12 +382,12 @@
 
   /* ============== PAPÉIS / ABAS (sem seletor livre — cada login já é um papel) ============== */
   var ROLES_META = {
-    vendedor:{label:'Vendedor', tabs:[{key:'leads',label:'Leads',icon:'kanban'},{key:'clientes',label:'Fechados',icon:'check'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'perfil',label:'Perfil',icon:'user'}]},
+    vendedor:{label:'Vendedor', tabs:[{key:'leads',label:'Leads',icon:'kanban'},{key:'nova-lead',label:'Novo lead',icon:'plus'},{key:'clientes',label:'Fechados',icon:'check'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'perfil',label:'Perfil',icon:'user'}]},
     administrativo:{label:'Administrativo', tabs:[{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'financeiro',label:'Financeiro',icon:'coin'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'visao-adm',label:'Visão geral',icon:'chart'}]},
     posvendas:{label:'Pós-vendas', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'desempenho-pv',label:'Desempenho',icon:'chart'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'},{key:'recibos',label:'Recibos',icon:'coin'}]},
     rh:{label:'RH da Empresa', tabs:[{key:'minhas-rh',label:'Solicitações',icon:'list'},{key:'nova-rh',label:'Nova',icon:'plus'},{key:'desempenho-rh',label:'Desempenho',icon:'chart'},{key:'pendencias-rh',label:'Pendências',icon:'alert'}]},
     cliente:{label:'Cliente Final', tabs:[{key:'minhas-cli',label:'Meus pedidos',icon:'list'},{key:'pendencias-cli',label:'Pendências',icon:'alert'},{key:'nova-cli',label:'Novo pedido',icon:'plus'}]},
-    gestao:{label:'Gestão', tabs:[{key:'visao-geral',label:'Visão geral',icon:'chart'},{key:'departamentos',label:'Departamentos',icon:'kanban'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'desempenho-pv',label:'Desemp. pós-vendas',icon:'chart'},{key:'alertas',label:'Alertas',icon:'alert'},{key:'recibos',label:'Recibos',icon:'coin'}]},
+    gestao:{label:'Gestão', tabs:[{key:'visao-geral',label:'Visão geral',icon:'chart'},{key:'departamentos',label:'Departamentos',icon:'kanban'},{key:'ranking-vendas',label:'Ranking vendas',icon:'chart'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'desempenho-pv',label:'Desemp. pós-vendas',icon:'chart'},{key:'alertas',label:'Alertas',icon:'alert'},{key:'recibos',label:'Recibos',icon:'coin'}]},
     implantacao:{label:'Implantação', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'desempenho-pv',label:'Desempenho',icon:'chart'},{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'clientes',label:'Fechados',icon:'check'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'},{key:'recibos',label:'Recibos',icon:'coin'}]}
   };
 
@@ -592,6 +596,9 @@
       if(['fechado','perdido'].indexOf(l.etapa)===-1 && l.dias>=5){
         out.push({icon:'clock', tone:'warn', text:'Lead <b>'+l.nome+'</b> parado há '+l.dias+' dias em "'+LEAD_STAGES.find(function(s){return s.key===l.etapa;}).label+'".'});
       }
+      if(l.followupAtrasado){
+        out.push({icon:'alert', tone:'crit', text:'Follow-up de <b>'+l.nome+'</b> estava marcado para '+l.followup+' e ainda não foi feito.'});
+      }
     });
     STATE.tasks.forEach(function(t){
       if(t.atrasada) out.push({icon:'alert', tone:'crit', text:'Tarefa <b>'+t.titulo+'</b> está atrasada (prazo '+t.prazo+').'});
@@ -683,8 +690,10 @@
     var html = '';
     switch(tab){
       case 'leads': html = viewKanbanLeads(); break;
+      case 'nova-lead': html = viewNovaLead(); break;
       case 'clientes': html = viewClientesFechados(); break;
       case 'perfil': html = viewPerfilVendedor(); break;
+      case 'ranking-vendas': html = viewRankingVendedores(); break;
       case 'inclusao': html = viewKanbanInclusao(); break;
       case 'financeiro': html = viewKanbanFinanceiro(); break;
       case 'tarefas': html = viewKanbanTarefas(); break;
@@ -776,6 +785,8 @@
     });
     var form = document.getElementById('novaSolicForm');
     if(form) form.addEventListener('submit', handleNovaSolicSubmit);
+    var novoLeadForm = document.getElementById('novoLeadForm');
+    if(novoLeadForm) novoLeadForm.addEventListener('submit', handleNovoLeadSubmit);
     var fileInput = document.getElementById('novaSolicFile');
     if(fileInput) fileInput.addEventListener('change', function(){
       var chip = document.getElementById('attachChip');
@@ -901,7 +912,10 @@
           return {
             id:r.id, nome:r.nome_contato, empresa:r.empresa_prospect||'—', tipo:r.tipo_negocio||'—',
             valor:Number(r.valor_estimado)||0, etapa:r.etapa, dias: daysSince(r.updated_at||r.created_at),
-            vendedor: (r.perfis && r.perfis.nome) || '—', historico: hist[r.id]||[]
+            vendedor: (r.perfis && r.perfis.nome) || '—', vendedorId: r.vendedor_id, historico: hist[r.id]||[],
+            motivoPerda: r.motivo_perda||'',
+            followupISO: r.proximo_followup||null, followup: r.proximo_followup ? fmtDateBR(r.proximo_followup) : null,
+            followupAtrasado: computeAtrasada(r.proximo_followup, r.etapa, ['fechado','perdido'])
           };
         });
       });
@@ -1091,9 +1105,12 @@
       var items = STATE.leads.filter(function(l){return l.etapa===stage.key;});
       return '<div class="column"><div class="column-head"><span class="name">'+stage.label+'</span><span class="column-count">'+items.length+'</span></div>'+
         '<div class="column-body">'+(items.length ? items.map(function(l){
+          var followupChip = l.followup
+            ? (l.followupAtrasado ? '<span class="chip chip-crit">'+ic('alert')+' follow-up '+l.followup+'</span>' : '<span class="chip chip-ok">'+ic('clock')+' follow-up '+l.followup+'</span>')
+            : '';
           return '<button class="card" data-open="lead:'+l.id+'"><div class="name">'+l.nome+'</div>'+
             '<div class="meta">'+l.empresa+' · '+l.tipo+'</div>'+
-            '<div class="foot"><span class="money">'+fmtMoney(l.valor)+'</span>'+slaChip(l.dias)+'</div></button>';
+            '<div class="foot"><span class="money">'+fmtMoney(l.valor)+'</span>'+slaChip(l.dias)+followupChip+'</div></button>';
         }).join('') : '<div class="empty-col">Nada aqui</div>')+'</div></div>';
     }).join('');
     return '<div class="kanban">'+cols+'</div>';
@@ -1124,6 +1141,80 @@
       '<div class="row-card" style="cursor:default"><div class="row-title">'+perfil.nome+'</div>'+
       '<div class="row-sub">Consultor comercial · Panacea Seguros</div>'+
       '<div class="row-sub">'+(perfil.email||'')+'</div></div></div>';
+  }
+
+  function viewNovaLead(){
+    return '<div class="content-pad">'+
+      '<div class="section-label">Cadastrar novo lead</div>'+
+      '<form id="novoLeadForm">'+
+        '<div class="field"><label>Nome do contato</label><input type="text" name="nome" placeholder="Nome de quem você falou" required /></div>'+
+        '<div class="field"><label>Empresa (se for PJ)</label><input type="text" name="empresa" placeholder="Deixe em branco se for pessoa física" /></div>'+
+        '<div class="field"><label>Tipo de negócio</label><input type="text" name="tipo" placeholder="Ex: Plano de saúde, Seguro de vida..." required /></div>'+
+        '<div class="field"><label>Valor estimado</label><input type="number" name="valor" min="0" step="0.01" placeholder="0,00" /></div>'+
+        '<div class="field"><label>Follow-up (opcional)</label><input type="date" name="followup" /></div>'+
+        '<button type="submit" class="btn btn-primary">'+ic('plus')+' Cadastrar lead</button>'+
+      '</form></div>';
+  }
+
+  function handleNovoLeadSubmit(e){
+    e.preventDefault();
+    var form = e.target;
+    var nome = form.nome.value.trim();
+    var empresa = form.empresa.value.trim();
+    var tipo = form.tipo.value.trim();
+    var valor = parseFloat(form.valor.value) || 0;
+    var followup = form.followup.value || null;
+    if(!nome || !tipo) return;
+    var btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    var payload = {
+      nome_contato: nome, empresa_prospect: empresa || null, tipo_negocio: tipo,
+      valor_estimado: valor, etapa: 'novo', vendedor_id: perfil.id, proximo_followup: followup
+    };
+    sb.from('leads').insert(payload).select().single().then(function(res){
+      if(res.error){ btn.disabled=false; showToast('Não deu pra cadastrar — tente de novo'); return; }
+      var row = res.data;
+      sb.from('historico').insert({ entidade_tipo:'lead', entidade_id: row.id, texto:'Lead cadastrado pelo app.', created_by: perfil.id }).then(function(){
+        showToast('Lead cadastrado');
+        lastTabByRole[perfil.papel] = 'leads';
+        refreshData().then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); btn.disabled=false; });
+      });
+    });
+  }
+
+  function viewRankingVendedores(){
+    var vendedores = STATE.equipeInterna.filter(function(m){ return m.papel==='vendedor'; });
+    var porPessoa = {};
+    vendedores.forEach(function(v){ porPessoa[v.id] = { nome:v.nome, total:0, fechados:0, perdidos:0, pipeline:0, somaFechados:0 }; });
+    STATE.leads.forEach(function(l){
+      var b = porPessoa[l.vendedorId];
+      if(!b) return; // vendedor não está mais na equipe ativa
+      b.total++;
+      if(l.etapa==='fechado'){ b.fechados++; b.somaFechados += l.valor; }
+      else if(l.etapa==='perdido'){ b.perdidos++; }
+      else { b.pipeline += l.valor; }
+    });
+    var linhas = vendedores.map(function(v){ return porPessoa[v.id]; }).sort(function(a,b){ return b.fechados - a.fechados; });
+    var cards = linhas.map(function(b){
+      var ticketMedio = b.fechados ? b.somaFechados / b.fechados : 0;
+      var decididos = b.fechados + b.perdidos;
+      var conversao = decididos ? Math.round((b.fechados/decididos)*100) : null;
+      return '<div class="row-card" style="cursor:default; margin-bottom:.6rem">'+
+        '<div class="row-top"><div class="row-title">'+ic('user')+' '+b.nome+'</div>'+
+        '<span class="chip '+(conversao==null?'chip-neutral':(conversao>=50?'chip-ok':'chip-warn'))+'">'+(conversao==null?'Sem fechamentos ainda':'Conversão '+conversao+'%')+'</span>'+
+        '</div>'+
+        '<div class="stat-grid" style="margin-top:.5rem; margin-bottom:0">'+
+          '<div class="stat-tile"><div class="n">'+b.total+'</div><div class="l">Leads no total</div></div>'+
+          '<div class="stat-tile"><div class="n">'+b.fechados+'</div><div class="l">Fechados</div></div>'+
+          '<div class="stat-tile"><div class="n mono">'+fmtMoney(b.pipeline)+'</div><div class="l">Em pipeline</div></div>'+
+          '<div class="stat-tile"><div class="n mono">'+fmtMoney(ticketMedio)+'</div><div class="l">Ticket médio (fechados)</div></div>'+
+        '</div></div>';
+    }).join('');
+    return '<div class="content-pad">'+
+      '<div class="section-label">Ranking de vendas</div>'+
+      '<p class="row-sub" style="margin-bottom:.7rem">Volume de leads, fechamentos, pipeline e taxa de conversão por vendedor.</p>'+
+      (cards || '<div class="empty-col">Nenhum vendedor na equipe ainda.</div>')+
+    '</div>';
   }
 
   /* ============== VIEW: Administrativo ============== */
@@ -2103,19 +2194,90 @@
     if(!l) return;
     var nextStage = {novo:'contato', contato:'proposta', proposta:'negociacao', negociacao:'fechado'}[l.etapa];
     var stageLabel = function(k){ return LEAD_STAGES.find(function(s){return s.key===k;}).label; };
+    var souDono = l.vendedorId === perfil.id;
+    var podeGerenciar = (perfil.papel==='vendedor' && souDono) || perfil.papel==='administrativo' || perfil.papel==='gestao';
     var html = '<h3>'+l.nome+'</h3><p class="row-sub" style="margin-bottom:.7rem">'+l.empresa+' · '+l.tipo+'</p>'+
       '<div class="kv"><span class="k">Etapa atual</span><span class="v">'+stageLabel(l.etapa)+'</span></div>'+
       '<div class="kv"><span class="k">Valor estimado</span><span class="v mono">'+fmtMoney(l.valor)+'</span></div>'+
       '<div class="kv"><span class="k">Responsável</span><span class="v">'+l.vendedor+'</span></div>'+
-      '<div class="section-label" style="margin-top:1rem">Histórico</div>'+timelineHtml(l.historico);
-    if(perfil.papel==='vendedor' && nextStage){
-      html += '<div class="btn-row"><button class="btn btn-primary" data-action="lead-advance" data-id="'+id+'" data-to="'+nextStage+'">'+ic('chev')+' Mover para "'+stageLabel(nextStage)+'"</button>'+
-        '<button class="btn btn-danger" data-action="lead-lost" data-id="'+id+'">'+ic('x')+' Marcar como perdido</button></div>';
-    } else if(perfil.papel==='vendedor'){
+      '<div class="kv"><span class="k">Próximo follow-up</span><span class="v">'+(l.followup||'—')+(l.followupAtrasado?' <span class="chip chip-crit" style="padding:.05rem .35rem">atrasado</span>':'')+'</span></div>';
+    if(l.etapa==='perdido'){
+      html += '<div class="kv"><span class="k">Motivo da perda</span><span class="v">'+(MOTIVO_PERDA_LABEL[l.motivoPerda]||'—')+'</span></div>';
+    }
+    html += '<div class="section-label" style="margin-top:1rem">Histórico</div>'+timelineHtml(l.historico);
+    if(podeGerenciar){
+      html += '<div class="section-label" style="margin-top:1rem">Follow-up</div>'+
+        '<form id="leadFollowupForm" class="btn-row" style="flex-direction:row">'+
+          '<input type="date" name="followup" value="'+(l.followupISO||'')+'" style="flex:1" />'+
+          '<button type="submit" class="btn btn-ghost" style="width:auto">Salvar</button>'+
+        '</form>'+
+        '<div class="section-label" style="margin-top:1rem">Adicionar nota</div>'+
+        '<form id="leadNotaForm">'+
+          '<div class="field"><textarea name="nota" rows="2" placeholder="Ex: aguardando retorno do cliente" required></textarea></div>'+
+          '<button type="submit" class="btn btn-ghost" style="width:auto">Adicionar nota</button>'+
+        '</form>';
+    }
+    if(perfil.papel==='vendedor' && souDono && nextStage){
+      html += '<div class="btn-row"><button class="btn btn-primary" data-action="lead-advance" data-id="'+id+'" data-to="'+nextStage+'">'+ic('chev')+' Mover para "'+stageLabel(nextStage)+'"</button></div>'+
+        '<div class="section-label" style="margin-top:1rem">Marcar como perdido</div>'+
+        '<form id="leadPerdidoForm">'+
+          '<div class="field"><label>Motivo</label><select name="motivo" required><option value="">Selecione...</option>'+
+            Object.keys(MOTIVO_PERDA_LABEL).map(function(k){ return '<option value="'+k+'">'+MOTIVO_PERDA_LABEL[k]+'</option>'; }).join('')+
+          '</select></div>'+
+          '<div class="field"><label>Observação (opcional)</label><textarea name="obs" rows="2" placeholder="Algum detalhe a mais..."></textarea></div>'+
+          '<button type="submit" class="btn btn-danger">'+ic('x')+' Marcar como perdido</button>'+
+        '</form>';
+    } else if(perfil.papel==='vendedor' && souDono){
       html += '<div class="btn-row"><button class="btn btn-ghost" disabled>Negociação encerrada</button></div>';
     }
     openSheet(html);
     bindSheetActions();
+
+    var followupForm = document.getElementById('leadFollowupForm');
+    if(followupForm){
+      followupForm.addEventListener('submit', function(e){
+        e.preventDefault();
+        var btn = followupForm.querySelector('button[type=submit]');
+        btn.disabled = true;
+        var novoFollowup = followupForm.followup.value || null;
+        sb.from('leads').update({ proximo_followup: novoFollowup, updated_at: new Date().toISOString() }).eq('id', id)
+          .then(function(){ return addHistorico('lead', id, novoFollowup ? 'Follow-up marcado para '+fmtDateBR(novoFollowup)+'.' : 'Follow-up removido.'); })
+          .then(function(){ showToast('Follow-up atualizado'); closeSheet(); return refreshData(); })
+          .then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); })
+          .catch(function(){ btn.disabled=false; showToast('Não deu — tente de novo'); });
+      });
+    }
+    var notaForm = document.getElementById('leadNotaForm');
+    if(notaForm){
+      notaForm.addEventListener('submit', function(e){
+        e.preventDefault();
+        var texto = notaForm.nota.value.trim();
+        if(!texto) return;
+        var btn = notaForm.querySelector('button[type=submit]');
+        btn.disabled = true;
+        addHistorico('lead', id, texto)
+          .then(function(){ showToast('Nota adicionada'); closeSheet(); return refreshData(); })
+          .then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); })
+          .catch(function(){ btn.disabled=false; showToast('Não deu — tente de novo'); });
+      });
+    }
+    var perdidoForm = document.getElementById('leadPerdidoForm');
+    if(perdidoForm){
+      perdidoForm.addEventListener('submit', function(e){
+        e.preventDefault();
+        var motivo = perdidoForm.motivo.value;
+        if(!motivo) return;
+        var obs = perdidoForm.obs.value.trim();
+        var btn = perdidoForm.querySelector('button[type=submit]');
+        btn.disabled = true;
+        var texto = 'Marcado como perdido — motivo: '+MOTIVO_PERDA_LABEL[motivo]+(obs?'. '+obs:'.');
+        sb.from('leads').update({ etapa:'perdido', motivo_perda: motivo, updated_at: new Date().toISOString() }).eq('id', id)
+          .then(function(){ return addHistorico('lead', id, texto); })
+          .then(function(){ showToast('Lead marcado como perdido'); closeSheet(); return refreshData(); })
+          .then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); })
+          .catch(function(){ btn.disabled=false; showToast('Não deu — tente de novo'); });
+      });
+    }
   }
 
   function openTaskDetail(id){
@@ -2312,14 +2474,15 @@
         btn.disabled = true;
         var action = btn.dataset.action, id = btn.dataset.id, to = btn.dataset.to;
         var work;
-        if(action==='lead-advance'){
+        if(action==='lead-advance' && to==='fechado'){
+          work = sb.rpc('fechar_lead', { p_lead_id: id }).then(function(res){
+            if(res.error) throw res.error;
+            showToast(res.data ? 'Lead fechado — implantação aberta automaticamente' : 'Lead fechado');
+          });
+        } else if(action==='lead-advance'){
           work = sb.from('leads').update({etapa:to, updated_at:new Date().toISOString()}).eq('id', id)
             .then(function(){ return addHistorico('lead', id, 'Movido para "'+LEAD_STAGES.find(function(s){return s.key===to;}).label+'".'); })
             .then(function(){ showToast('Lead atualizado'); });
-        } else if(action==='lead-lost'){
-          work = sb.from('leads').update({etapa:'perdido', updated_at:new Date().toISOString()}).eq('id', id)
-            .then(function(){ return addHistorico('lead', id, 'Marcado como perdido.'); })
-            .then(function(){ showToast('Lead marcado como perdido'); });
         } else if(action==='task-advance'){
           work = sb.from('tarefas_admin').update({etapa:to}).eq('id', id).then(function(){ showToast('Tarefa atualizada'); });
         } else if(action==='incl-advance'){
