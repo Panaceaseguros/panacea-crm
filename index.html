@@ -241,6 +241,30 @@
   .pending-wrap h2{font-size:1.1rem;margin:0;}
   .pending-wrap p{color:var(--ink-muted);font-size:.88rem;max-width:32ch;margin:0;}
   .loading-wrap{flex:1;display:flex;align-items:center;justify-content:center;color:var(--ink-muted);font-size:.86rem;background:var(--bg);}
+
+  /* Coach de IA comercial — mascote + balão + conversa em chat */
+  .coach-wrap{display:flex; flex-direction:column; gap:.7rem;}
+  .coach-header{display:flex; align-items:flex-start; gap:.6rem;}
+  .coach-avatar{width:56px; height:72px; flex:none; animation:coachBob 3.4s ease-in-out infinite;}
+  .coach-avatar svg{width:100%; height:100%;}
+  .coach-avatar .blink{animation:coachBlink 4.6s ease-in-out infinite;}
+  @keyframes coachBob{0%,100%{transform:translateY(0);} 50%{transform:translateY(-3px);}}
+  @keyframes coachBlink{0%,92%,100%{transform:scaleY(1);} 95%{transform:scaleY(.12);}}
+  .coach-bubble{position:relative; background:var(--info-tint); color:var(--teal-900); border-radius:14px; padding:.65rem .8rem; font-size:.83rem; line-height:1.4; flex:1; font-weight:600;}
+  .coach-bubble::before{content:''; position:absolute; left:-6px; top:14px; width:12px; height:12px; background:var(--info-tint); transform:rotate(45deg); border-radius:2px;}
+  .coach-bubble.thinking{display:flex; align-items:center; gap:.3rem; font-weight:400; color:var(--ink-muted);}
+  .coach-dot{width:5px; height:5px; border-radius:50%; background:var(--ink-faint); animation:coachDot 1.2s ease-in-out infinite;}
+  .coach-dot:nth-child(2){animation-delay:.15s;} .coach-dot:nth-child(3){animation-delay:.3s;}
+  @keyframes coachDot{0%,60%,100%{opacity:.3; transform:translateY(0);} 30%{opacity:1; transform:translateY(-2px);}}
+  .coach-thread{display:flex; flex-direction:column; gap:.5rem; max-height:38vh; overflow-y:auto; padding:.1rem .1rem .3rem;}
+  .coach-msg{max-width:84%; padding:.5rem .7rem; border-radius:12px; font-size:.8rem; line-height:1.4;}
+  .coach-msg.ia{align-self:flex-start; background:var(--surface-2); color:var(--ink);}
+  .coach-msg.vendedor{align-self:flex-end; background:var(--teal-900); color:#fff;}
+  .coach-progress{font-size:.68rem; color:var(--ink-faint); text-align:center;}
+  .coach-final{background:var(--gold-tint); border:1px solid var(--gold-light); border-radius:var(--radius-md); padding:.75rem .8rem; display:flex; flex-direction:column; gap:.5rem;}
+  .coach-final .lbl{font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--gold-dark);}
+  .coach-final .tx{font-size:.83rem; line-height:1.45; color:var(--teal-900);}
+  .coach-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:.7rem .8rem; margin-bottom:.55rem;}
 </style>
 
 <div class="app-shell" id="appShell"></div>
@@ -274,7 +298,8 @@
     doc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M7 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5A1.5 1.5 0 0 1 7 3.5Z"/><path d="M14 3.5V8h4"/></svg>',
     x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>',
     coin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.3"/><path d="M12 7.5v9M14.6 9.4c-.4-.8-1.3-1.2-2.4-1.2-1.3 0-2.5.7-2.5 1.9 0 2.6 4.8 1.3 4.8 3.9 0 1.2-1.2 1.9-2.5 1.9-1.1 0-2-.4-2.4-1.2"/></svg>',
-    logout:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/><polyline points="15 16 20 11 15 6"/><line x1="20" y1="11" x2="9" y2="11"/></svg>'
+    logout:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/><polyline points="15 16 20 11 15 6"/><line x1="20" y1="11" x2="9" y2="11"/></svg>',
+    sparkles:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 13.6 9l5.4 1.6-5.4 1.6L12 17.7 10.4 12.2 5 10.6l5.4-1.6L12 3.5Z"/><path d="M19 3.5v3.4M17.3 5.2h3.4"/><path d="M5.5 16v2.6M4.2 17.3h2.6"/></svg>'
   };
   function ic(name){ return ICONS[name] || ''; }
 
@@ -380,22 +405,292 @@
   function toneBg(tone){ return tone==='crit' ? 'var(--critical-tint)' : tone==='warn' ? 'var(--warning-tint)' : 'var(--info-tint)'; }
   function toneFg(tone){ return tone==='crit' ? 'var(--critical)' : tone==='warn' ? 'var(--warning)' : 'var(--info)'; }
 
+  /* ============== CONCILIAÇÃO DE COMISSÕES — leitura dos relatórios ==============
+     Cada operadora manda o extrato de comissão num formato diferente. Os
+     parsers abaixo foram validados linha a linha contra relatórios reais de
+     cada uma (Porto, SulAmérica, Bradesco, Alice, Hapvida, Amil e CNU) antes
+     de entrar aqui — cada um devolve uma lista de objetos no mesmo formato:
+     {identificador, nomeCliente, parcelaNumero, competencia('YYYY-MM'),
+      valorBase, percentual, valorComissao, dataPagamento('YYYY-MM-DD')}. */
+  var COMISSAO_OPERADORAS = [
+    {key:'porto', label:'Porto Seguro'},
+    {key:'sulamerica', label:'SulAmérica'},
+    {key:'bradesco', label:'Bradesco Saúde'},
+    {key:'alice', label:'Alice'},
+    {key:'hapvida', label:'Hapvida'},
+    {key:'amil', label:'Amil'},
+    {key:'cnu', label:'CNU'}
+  ];
+  function operadoraLabel(key){ var o = COMISSAO_OPERADORAS.find(function(x){return x.key===key;}); return o ? o.label : key; }
+  var COMISSAO_STATUS_LABEL = {
+    pendente_baseline: {label:'Falta valor base', cls:'chip-warn', ic:'alert'},
+    ok:                 {label:'Em dia',           cls:'chip-ok',   ic:'check'},
+    valor_divergente:   {label:'Valor divergente',  cls:'chip-crit', ic:'alert'},
+    parcela_faltante:   {label:'Sumiu do relatório', cls:'chip-crit', ic:'alert'},
+    cancelado:          {label:'Cancelado',         cls:'chip-neutral', ic:'x'}
+  };
+  // diferença de até R$1 é considerada arredondamento e passa direto, sem
+  // gerar alerta — diferenças de verdade (faixa etária não avisada etc.)
+  // costumam ser bem maiores que isso.
+  var TOLERANCIA_COMISSAO = 1.00;
+
+  function parseNumBR(s){
+    if(s==null) return null;
+    s = String(s).trim().replace(/^R\$\s*/, '');
+    if(s==='' || s==='-') return null;
+    s = s.replace(/\./g, '').replace(',', '.');
+    var n = parseFloat(s);
+    return isNaN(n) ? null : n;
+  }
+  function parseDateBRComissao(s){
+    if(!s) return null;
+    var m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s).trim());
+    if(!m) return null;
+    return m[3]+'-'+m[2]+'-'+m[1];
+  }
+  function competenciaFromDateBR(s){
+    var iso = parseDateBRComissao(s);
+    return iso ? iso.slice(0,7) : null;
+  }
+  var MES_ABREV_PT = {jan:'01',fev:'02',mar:'03',abr:'04',mai:'05',jun:'06',jul:'07',ago:'08',set:'09',out:'10',nov:'11',dez:'12'};
+  function competenciaFromMesAno(s){
+    if(!s) return null;
+    s = String(s).trim().toLowerCase();
+    var m1 = /^([a-zç]{3})\/(\d{2,4})$/.exec(s);
+    if(m1 && MES_ABREV_PT[m1[1]]){ var ano = m1[2].length===2 ? '20'+m1[2] : m1[2]; return ano+'-'+MES_ABREV_PT[m1[1]]; }
+    var m2 = /^(\d{2})\/(\d{4})$/.exec(s);
+    if(m2) return m2[2]+'-'+m2[1];
+    if(/^\d{4}-\d{2}$/.test(s)) return s;
+    return null;
+  }
+  function modaCompetencia(linhas){
+    var counts = {}, best = null, bestN = 0;
+    linhas.forEach(function(l){ if(l.competencia) counts[l.competencia] = (counts[l.competencia]||0)+1; });
+    Object.keys(counts).forEach(function(k){ if(counts[k]>bestN){ best=k; bestN=counts[k]; } });
+    return best;
+  }
+
+  // Porto Seguro — CSV ';' com cabeçalho fixo de 8 linhas.
+  function parsePorto(text){
+    var linhas = text.split(/\r?\n/), out = [];
+    for(var i=0;i<linhas.length;i++){
+      var cols = linhas[i].split(';');
+      if(cols.length<12) continue;
+      var nome = (cols[0]||'').trim();
+      if(!nome || /^total/i.test(nome)) continue;
+      var apl = (cols[3]||'').trim();
+      if(!/^\d+$/.test(apl)) continue;
+      var data = (cols[7]||'').trim();
+      if(!/^\d{2}\/\d{2}\/\d{4}$/.test(data)) continue; // descarta a linha de totais do rodapé
+      out.push({
+        identificador: apl, nomeCliente: nome, parcelaNumero: parseInt(cols[5],10)||null,
+        competencia: competenciaFromDateBR(data), valorBase: parseNumBR(cols[8]), percentual: parseNumBR(cols[9]),
+        valorComissao: parseNumBR(cols[10])||0, dataPagamento: parseDateBRComissao(data)
+      });
+    }
+    return out;
+  }
+
+  // SulAmérica — largura fixa, sem delimitador; um "bloco de empresa" por
+  // linha, identificado por regex ancorada no dígito do item + nome maiúsculo.
+  function parseSulamerica(text){
+    var pat = new RegExp(
+      '\\s(\\d)([A-ZÀ-Ü][A-ZÀ-Ü0-9ÇÃÕÁÉÍÓÚÂÊÔ\\.\\-&\'" ]*?)\\s{2,}'+
+      '(\\d{4,6})\\s+'+
+      '(\\d{3}\\w{2,4})\\s+'+
+      '(\\d{6,10})\\s+'+
+      '(\\S{1,10})\\s+'+
+      '(\\S{5,10})\\s+'+
+      '\\d+\\s+'+
+      '(\\d{2,6})(\\d{2}/\\d{2}/\\d{4})\\s+'+
+      '\\d\\s+\\d\\s+\\d\\s+\\d\\s+'+
+      '([\\d\\.]+,\\d{2})\\s+'+
+      '(\\d+)\\s+\\d+\\s+'+
+      '([\\d\\.]+,\\d{2})'
+    );
+    var linhas = text.split(/\r?\n/), out = [];
+    linhas.forEach(function(linhaRaw){
+      var linha = linhaRaw.replace(/^﻿/, '');
+      if(!linha.trim()) return;
+      var m = pat.exec(linha);
+      if(!m) return;
+      var data = m[9];
+      out.push({
+        identificador: m[5], nomeCliente: m[2].trim(), parcelaNumero: null,
+        competencia: competenciaFromDateBR(data), valorBase: parseNumBR(m[10]), percentual: parseNumBR(m[11]),
+        valorComissao: parseNumBR(m[12])||0, dataPagamento: parseDateBRComissao(data)
+      });
+    });
+    return out;
+  }
+
+  // Bradesco Saúde — CSV ';' com 2 linhas de cabeçalho, dados a partir da 3ª.
+  function parseBradesco(text){
+    var linhas = text.split(/\r?\n/).filter(function(l){return l.trim();});
+    var out = [];
+    for(var i=2;i<linhas.length;i++){
+      var cols = linhas[i].split(';');
+      if(cols.length<50) continue;
+      var seq = (cols[0]||'').trim();
+      if(!/^\d+$/.test(seq)) continue;
+      var nome = (cols[45]||'').trim();
+      if(!nome) continue;
+      var apolice = (cols[42]||'').trim();
+      var dataFatura = (cols[2]||'').trim();
+      out.push({
+        identificador: apolice ? (apolice+'|'+nome) : nome, nomeCliente: nome,
+        parcelaNumero: parseInt(cols[46],10)||null, competencia: competenciaFromDateBR(dataFatura),
+        valorBase: parseNumBR(cols[47]), percentual: parseNumBR(cols[48]), valorComissao: parseNumBR(cols[49])||0,
+        dataPagamento: parseDateBRComissao(dataFatura)
+      });
+    }
+    return out;
+  }
+
+  // Alice — CSV ';' com um resumo no topo; a tabela de membros começa na
+  // linha que tem "CPF Membro".
+  function parseAlice(text){
+    var linhas = text.split(/\r?\n/);
+    var headerIdx = -1;
+    for(var i=0;i<linhas.length;i++){ if(linhas[i].indexOf('CPF Membro')!==-1){ headerIdx=i; break; } }
+    if(headerIdx===-1) return [];
+    var out = [];
+    for(var j=headerIdx+1;j<linhas.length;j++){
+      var cols = linhas[j].split(';');
+      if(cols.length<12) continue;
+      var cpf = (cols[0]||'').trim();
+      if(!/^\d+$/.test(cpf)) continue;
+      var nome = (cols[1]||'').trim();
+      var razao = (cols[5]||'').trim();
+      var contrato = (cols[3]||'').trim();
+      out.push({
+        identificador: contrato || (cpf+'|'+nome),
+        nomeCliente: (razao && razao!==nome) ? (nome+' ('+razao+')') : nome,
+        parcelaNumero: parseInt(cols[6],10)||null, competencia: competenciaFromMesAno(cols[7]),
+        valorBase: parseNumBR(cols[9]), percentual: parseNumBR(cols[10]), valorComissao: parseNumBR(cols[11])||0,
+        dataPagamento: /^\d{4}-\d{2}-\d{2}$/.test((cols[8]||'').trim()) ? cols[8].trim() : null
+      });
+    }
+    return out;
+  }
+
+  // Hapvida — CSV ';' com um único cabeçalho. Cada beneficiário pode
+  // aparecer 2x (saúde/odonto) com código de usuário diferente — cada linha
+  // vira uma parcela própria.
+  function parseHapvida(text){
+    var linhas = text.split(/\r?\n/).filter(function(l){return l.trim();});
+    var out = [];
+    for(var i=1;i<linhas.length;i++){
+      var cols = linhas[i].split(';');
+      if(cols.length<27) continue;
+      var cdUsuario = (cols[12]||'').trim();
+      if(!cdUsuario) continue;
+      var valorBaseSaude = parseNumBR(cols[17]);
+      var valorBaseOdonto = parseNumBR(cols[19]);
+      var dtPagamento = (cols[6]||'').trim();
+      out.push({
+        identificador: cdUsuario, nomeCliente: (cols[13]||'').trim(),
+        parcelaNumero: parseInt(cols[16],10)||null,
+        competencia: competenciaFromDateBR(dtPagamento) || competenciaFromDateBR((cols[5]||'').trim()),
+        valorBase: (valorBaseSaude && valorBaseSaude>0) ? valorBaseSaude : valorBaseOdonto,
+        percentual: parseNumBR(cols[21]), valorComissao: parseNumBR(cols[22])||0,
+        dataPagamento: parseDateBRComissao(dtPagamento)
+      });
+    }
+    return out;
+  }
+
+  // Amil — texto delimitado por '#'; acha a tabela pelo cabeçalho que começa
+  // com "Porte Contrato#Contrato".
+  function parseAmil(text){
+    var linhas = text.split(/\r?\n/);
+    var headerIdx = -1;
+    for(var i=0;i<linhas.length;i++){ if(linhas[i].indexOf('Porte Contrato#Contrato')===0){ headerIdx=i; break; } }
+    if(headerIdx===-1) return [];
+    var out = [];
+    for(var j=headerIdx+1;j<linhas.length;j++){
+      var linha = linhas[j];
+      if(!linha.trim()) break; // fim da tabela de itens (o resumo vem depois)
+      var cols = linha.split('#');
+      if(cols.length<17) continue;
+      var contrato = (cols[1]||'').trim();
+      if(!contrato) continue;
+      out.push({
+        identificador: contrato, nomeCliente: (cols[17]||'').trim() || contrato,
+        parcelaNumero: parseInt(cols[5],10)||null, competencia: competenciaFromMesAno(cols[7]),
+        valorBase: parseNumBR(cols[15]), percentual: parseNumBR(cols[6]), valorComissao: parseNumBR(cols[16])||0,
+        dataPagamento: null
+      });
+    }
+    return out;
+  }
+
+  // CNU — CSV ';' com um único cabeçalho.
+  function parseCnu(text){
+    var linhas = text.split(/\r?\n/).filter(function(l){return l.trim();});
+    var out = [];
+    for(var i=1;i<linhas.length;i++){
+      var cols = linhas[i].split(';');
+      if(cols.length<18) continue;
+      var contrato = (cols[2]||'').trim();
+      if(!contrato) continue;
+      var nome = (cols[8]||'').trim() || (cols[3]||'').trim();
+      var venc = (cols[9]||'').trim();
+      out.push({
+        identificador: contrato, nomeCliente: nome,
+        parcelaNumero: parseInt(cols[14],10)||null, competencia: competenciaFromMesAno(cols[10]),
+        valorBase: parseNumBR(cols[15]), percentual: parseNumBR(cols[16]), valorComissao: parseNumBR(cols[17])||0,
+        dataPagamento: parseDateBRComissao(venc)
+      });
+    }
+    return out;
+  }
+
+  function parseRelatorioComissao(operadora, text){
+    switch(operadora){
+      case 'porto': return parsePorto(text);
+      case 'sulamerica': return parseSulamerica(text);
+      case 'bradesco': return parseBradesco(text);
+      case 'alice': return parseAlice(text);
+      case 'hapvida': return parseHapvida(text);
+      case 'amil': return parseAmil(text);
+      case 'cnu': return parseCnu(text);
+      default: return [];
+    }
+  }
+  function readFileAsText(file){
+    return new Promise(function(resolve, reject){
+      var reader = new FileReader();
+      reader.onload = function(){ resolve(reader.result); };
+      reader.onerror = function(){ reject(reader.error); };
+      reader.readAsText(file, 'UTF-8');
+    });
+  }
+
   /* ============== PAPÉIS / ABAS (sem seletor livre — cada login já é um papel) ============== */
   var ROLES_META = {
     vendedor:{label:'Vendedor', tabs:[{key:'leads',label:'Leads',icon:'kanban'},{key:'nova-lead',label:'Novo lead',icon:'plus'},{key:'clientes',label:'Fechados',icon:'check'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'perfil',label:'Perfil',icon:'user'}]},
-    administrativo:{label:'Administrativo', tabs:[{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'financeiro',label:'Financeiro',icon:'coin'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'visao-adm',label:'Visão geral',icon:'chart'}]},
+    administrativo:{label:'Administrativo', tabs:[{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'financeiro',label:'Financeiro',icon:'coin'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'conciliacao',label:'Conciliação',icon:'upload'},{key:'coaching-ia',label:'Coaching IA',icon:'sparkles'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'visao-adm',label:'Visão geral',icon:'chart'}]},
     posvendas:{label:'Pós-vendas', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'desempenho-pv',label:'Desempenho',icon:'chart'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'},{key:'recibos',label:'Recibos',icon:'coin'}]},
     rh:{label:'RH da Empresa', tabs:[{key:'minhas-rh',label:'Solicitações',icon:'list'},{key:'nova-rh',label:'Nova',icon:'plus'},{key:'desempenho-rh',label:'Desempenho',icon:'chart'},{key:'pendencias-rh',label:'Pendências',icon:'alert'}]},
     cliente:{label:'Cliente Final', tabs:[{key:'minhas-cli',label:'Meus pedidos',icon:'list'},{key:'pendencias-cli',label:'Pendências',icon:'alert'},{key:'nova-cli',label:'Novo pedido',icon:'plus'}]},
-    gestao:{label:'Gestão', tabs:[{key:'visao-geral',label:'Visão geral',icon:'chart'},{key:'departamentos',label:'Departamentos',icon:'kanban'},{key:'ranking-vendas',label:'Ranking vendas',icon:'chart'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'desempenho-pv',label:'Desemp. pós-vendas',icon:'chart'},{key:'alertas',label:'Alertas',icon:'alert'},{key:'recibos',label:'Recibos',icon:'coin'}]},
+    gestao:{label:'Gestão', tabs:[{key:'visao-geral',label:'Visão geral',icon:'chart'},{key:'departamentos',label:'Departamentos',icon:'kanban'},{key:'ranking-vendas',label:'Ranking vendas',icon:'chart'},{key:'conciliacao',label:'Conciliação',icon:'upload'},{key:'coaching-ia',label:'Coaching IA',icon:'sparkles'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'desempenho-pv',label:'Desemp. pós-vendas',icon:'chart'},{key:'alertas',label:'Alertas',icon:'alert'},{key:'recibos',label:'Recibos',icon:'coin'}]},
     implantacao:{label:'Implantação', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'desempenho-pv',label:'Desempenho',icon:'chart'},{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'clientes',label:'Fechados',icon:'check'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'},{key:'recibos',label:'Recibos',icon:'coin'}]}
   };
 
   /* ============== ESTADO ============== */
   var session = null;
   var perfil = null; // {id, papel, nome, email, empresaId, empresaNome}
-  var STATE = { leads:[], tasks:[], posvendas:[], inclusaoPropostas:[], financeiro:[], recibosMensais:[], recibosLancamentos:[], equipeInterna:[], contratos:[], segurados:[], comissoes:[], empresasAll:[] };
+  var STATE = { leads:[], tasks:[], posvendas:[], inclusaoPropostas:[], financeiro:[], recibosMensais:[], recibosLancamentos:[], equipeInterna:[], contratos:[], segurados:[], comissoes:[], empresasAll:[], comissaoAcompanhamentos:[], leadAtendimentos:[] };
   var posvendasFiltro = 'meus';
+  var conciliacaoMode = 'lista'; // 'lista' | 'importar'
+  var conciliacaoFiltroStatus = 'abertos';
+  var conciliacaoPreview = null; // resultado da análise do arquivo, antes de confirmar
+  var coachingFiltroStatus = 'todos'; // 'todos' | 'em_andamento' | 'concluido'
+  // sessão de chat ativa com o coach de IA (enquanto o sheet de conversa está
+  // aberto) — nunca fica em STATE porque é um fluxo em andamento, não um dado
+  // já salvo; some assim que o sheet fecha.
+  var chatSession = null; // {atendimentoId, leadId, leadNome, feedbackTexto, mensagens:[{papel,texto}], perguntasFeitas, concluido, resultado, aguardandoIa}
   var currentDept = 'leads';
   var recibosMode = 'lista';
   var recibosSelecionadoId = null;
@@ -626,6 +921,11 @@
     STATE.comissoes.forEach(function(c){
       if(c.status==='atrasado') out.push({icon:'alert', tone:'crit', text:'Comissão de <b>'+c.operadora+'</b> ('+c.empresaNome+', '+c.referenciaLabel+') está atrasada.'});
     });
+    STATE.comissaoAcompanhamentos.forEach(function(a){
+      if(a.status==='pendente_baseline') out.push({icon:'alert', tone:'warn', text:'Falta cadastrar o valor base de <b>'+a.nomeCliente+'</b> ('+operadoraLabel(a.operadora)+') pra começar a conferência de comissão.'});
+      else if(a.status==='valor_divergente') out.push({icon:'alert', tone:'crit', text:'Comissão de <b>'+a.nomeCliente+'</b> ('+operadoraLabel(a.operadora)+') veio com valor diferente do esperado.'});
+      else if(a.status==='parcela_faltante') out.push({icon:'alert', tone:'crit', text:'<b>'+a.nomeCliente+'</b> ('+operadoraLabel(a.operadora)+') sumiu do último relatório — possível cancelamento.'});
+    });
     return out;
   }
 
@@ -697,6 +997,8 @@
       case 'inclusao': html = viewKanbanInclusao(); break;
       case 'financeiro': html = viewKanbanFinanceiro(); break;
       case 'tarefas': html = viewKanbanTarefas(); break;
+      case 'conciliacao': html = viewConciliacao(); break;
+      case 'coaching-ia': html = viewCoachingIa(); break;
       case 'visao-adm': html = viewVisaoAdm(); break;
       case 'solicitacoes': html = viewKanbanPosvendas(); break;
       case 'documentos': html = viewDocumentos(); break;
@@ -829,6 +1131,36 @@
         painelFinMode = el.dataset.painelFinMode;
         if(painelFinMode==='lista') painelFinContratoId = null;
         renderContent();
+      });
+    });
+    document.querySelectorAll('[data-conciliacao-mode]').forEach(function(el){
+      el.addEventListener('click', function(){
+        conciliacaoMode = el.dataset.conciliacaoMode;
+        if(conciliacaoMode==='lista') conciliacaoPreview = null;
+        renderContent();
+      });
+    });
+    document.querySelectorAll('[data-conciliacao-filtro]').forEach(function(el){
+      el.addEventListener('click', function(){ conciliacaoFiltroStatus = el.dataset.conciliacaoFiltro; renderContent(); });
+    });
+    document.querySelectorAll('[data-coaching-filtro]').forEach(function(el){
+      el.addEventListener('click', function(){ coachingFiltroStatus = el.dataset.coachingFiltro; renderContent(); });
+    });
+    var importarComissaoForm = document.getElementById('importarComissaoForm');
+    if(importarComissaoForm) importarComissaoForm.addEventListener('submit', handleImportarComissaoSubmit);
+    var comissaoArquivoInput = document.getElementById('comissaoArquivoInput');
+    if(comissaoArquivoInput) comissaoArquivoInput.addEventListener('change', function(){
+      var lbl = document.getElementById('comissaoArquivoLabel');
+      if(lbl && comissaoArquivoInput.files && comissaoArquivoInput.files[0]) lbl.textContent = comissaoArquivoInput.files[0].name;
+    });
+    document.querySelectorAll('[data-conciliacao-action]').forEach(function(el){
+      el.addEventListener('click', function(){
+        var action = el.dataset.conciliacaoAction;
+        if(action==='cancelar'){ conciliacaoPreview = null; conciliacaoMode = 'lista'; renderContent(); return; }
+        if(action==='confirmar'){
+          el.disabled = true;
+          confirmarImportacaoComissao().catch(function(){ el.disabled = false; showToast('Não deu pra importar — tente de novo'); });
+        }
       });
     });
     document.querySelectorAll('[data-reajuste-aviso]').forEach(function(el){
@@ -1014,11 +1346,11 @@
 
   function refreshData(){
     var p = perfil.papel;
-    if(p==='vendedor') return Promise.all([fetchLeads(), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchComissoes()]);
-    if(p==='administrativo') return Promise.all([fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes()]);
+    if(p==='vendedor') return Promise.all([fetchLeads(), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchComissoes(), fetchLeadAtendimentos()]);
+    if(p==='administrativo') return Promise.all([fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes(), fetchComissaoAcompanhamentos(), fetchLeadAtendimentos()]);
     if(p==='posvendas') return Promise.all([fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchEquipeInterna()]);
     if(p==='rh' || p==='cliente') return fetchPosvendas(false);
-    if(p==='gestao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes(), fetchEquipeInterna()]);
+    if(p==='gestao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes(), fetchEquipeInterna(), fetchComissaoAcompanhamentos(), fetchLeadAtendimentos()]);
     if(p==='implantacao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchEquipeInterna()]);
     return Promise.resolve();
   }
@@ -1054,6 +1386,55 @@
   function fetchEmpresasAll(){
     return sb.from('empresas').select('id,nome').order('nome').then(function(res){
       STATE.empresasAll = res.error ? [] : (res.data||[]);
+    });
+  }
+
+  function fetchComissaoAcompanhamentos(){
+    return sb.from('comissao_acompanhamentos').select('*').order('updated_at', {ascending:false}).then(function(res){
+      if(res.error){ STATE.comissaoAcompanhamentos = []; return; }
+      var rows = res.data||[];
+      return fetchHistoricoFor('comissao', rows.map(function(r){return r.id;})).then(function(hist){
+        STATE.comissaoAcompanhamentos = rows.map(function(r){
+          return {
+            id:r.id, operadora:r.operadora, identificador:r.identificador, nomeCliente:r.nome_cliente,
+            valorMensalidade: r.valor_mensalidade!=null ? Number(r.valor_mensalidade) : null,
+            percentualComissao: r.percentual_comissao!=null ? Number(r.percentual_comissao) : null,
+            cicloMeses: r.ciclo_meses||12, status:r.status,
+            ultimaParcelaNumero: r.ultima_parcela_numero, ultimaCompetencia: r.ultima_competencia,
+            ultimoValorBase: r.ultimo_valor_base!=null ? Number(r.ultimo_valor_base) : null,
+            ultimoPercentual: r.ultimo_percentual!=null ? Number(r.ultimo_percentual) : null,
+            ultimoValorComissao: r.ultimo_valor_comissao!=null ? Number(r.ultimo_valor_comissao) : null,
+            ultimaDataRelatorio: r.ultima_data_relatorio, historico: hist[r.id]||[]
+          };
+        });
+      });
+    });
+  }
+
+  function fetchLeadAtendimentos(){
+    return sb.from('lead_atendimentos').select('*, leads(nome_contato), vendedor:perfis(nome)').order('updated_at', {ascending:false}).then(function(res){
+      if(res.error){ STATE.leadAtendimentos = []; return; }
+      var rows = res.data||[];
+      var ids = rows.map(function(r){return r.id;});
+      var mensagensPromise = ids.length
+        ? sb.from('lead_atendimento_mensagens').select('*').in('atendimento_id', ids).order('ordem', {ascending:true})
+        : Promise.resolve({data:[]});
+      return mensagensPromise.then(function(msgRes){
+        var porAtendimento = {};
+        (msgRes.data||[]).forEach(function(m){
+          (porAtendimento[m.atendimento_id] = porAtendimento[m.atendimento_id]||[]).push({ papel:m.papel, texto:m.texto, ordem:m.ordem });
+        });
+        STATE.leadAtendimentos = rows.map(function(r){
+          return {
+            id:r.id, leadId:r.lead_id, leadNome:(r.leads&&r.leads.nome_contato)||'—',
+            vendedorId:r.vendedor_id, vendedorNome:(r.vendedor&&r.vendedor.nome)||'—',
+            feedbackTexto:r.feedback_texto, status:r.status, totalPerguntasIa:r.total_perguntas_ia||0,
+            resumoFinal:r.resumo_final, sugestoesFinais:r.sugestoes_finais, posicionamentoSugerido:r.posicionamento_sugerido,
+            tecnicaRecomendada:r.tecnica_recomendada, createdAt:r.created_at, updatedAt:r.updated_at,
+            mensagens: porAtendimento[r.id]||[]
+          };
+        });
+      });
     });
   }
 
@@ -1797,6 +2178,464 @@
     });
   }
 
+  /* ============== VIEW: Conciliação de comissões ============== */
+  function viewConciliacao(){
+    if(conciliacaoMode==='importar') return viewImportarRelatorio();
+    return viewListaConciliacao();
+  }
+
+  function viewListaConciliacao(){
+    var todos = STATE.comissaoAcompanhamentos;
+    var abertosCount = todos.filter(function(a){return a.status!=='ok' && a.status!=='cancelado';}).length;
+    var filtro = conciliacaoFiltroStatus;
+    var itens = todos.filter(function(a){
+      if(filtro==='abertos') return a.status!=='ok' && a.status!=='cancelado';
+      if(filtro==='todos') return true;
+      return a.status===filtro;
+    }).sort(function(a,b){
+      var pa = (a.status==='ok'||a.status==='cancelado') ? 1 : 0;
+      var pb = (b.status==='ok'||b.status==='cancelado') ? 1 : 0;
+      if(pa!==pb) return pa-pb;
+      return (a.nomeCliente||'').localeCompare(b.nomeCliente||'');
+    });
+    var chipsFiltro = [
+      {k:'abertos', l:'Precisam de atenção ('+abertosCount+')'},
+      {k:'todos', l:'Todos'},
+      {k:'ok', l:'Em dia'},
+      {k:'cancelado', l:'Cancelados'}
+    ].map(function(c){
+      return '<button class="chip '+(filtro===c.k?'chip-gold':'chip-neutral')+'" style="border:none;cursor:pointer" data-conciliacao-filtro="'+c.k+'">'+c.l+'</button>';
+    }).join(' ');
+    var listHtml = itens.length ? itens.map(function(a){
+      var st = COMISSAO_STATUS_LABEL[a.status] || COMISSAO_STATUS_LABEL.ok;
+      return '<button class="row-card" data-open="comissao:'+a.id+'" style="margin-bottom:.6rem; display:block; width:100%; text-align:left"><div class="row-top">'+
+        '<div><div class="row-title">'+a.nomeCliente+'</div><div class="row-sub">'+operadoraLabel(a.operadora)+(a.ultimaCompetencia?' · última parcela '+a.ultimaCompetencia:'')+'</div></div>'+
+        '<span class="chip '+st.cls+'">'+ic(st.ic)+' '+st.label+'</span></div></button>';
+    }).join('') : '<div class="empty-col">Nada por aqui.</div>';
+    return '<div class="content-pad">'+
+      '<div style="display:flex; justify-content:space-between; align-items:center; gap:.6rem; margin-bottom:.7rem">'+
+        '<div class="section-label" style="margin-bottom:0">Conciliação de comissões</div>'+
+        '<button class="btn btn-primary" style="width:auto" data-conciliacao-mode="importar">'+ic('upload')+' Importar relatório</button>'+
+      '</div>'+
+      '<p class="row-sub" style="margin-bottom:.7rem">Confira, dê baixa e acompanhe quando alguma parcela vier diferente do esperado ou sumir de um relatório.</p>'+
+      '<div style="display:flex;gap:.4rem;margin-bottom:.8rem;flex-wrap:wrap">'+chipsFiltro+'</div>'+
+      listHtml+
+    '</div>';
+  }
+
+  function viewImportarRelatorio(){
+    if(conciliacaoPreview) return viewPreviewImportacao();
+    var opts = COMISSAO_OPERADORAS.map(function(o){ return '<option value="'+o.key+'">'+o.label+'</option>'; }).join('');
+    return '<div class="content-pad">'+
+      '<div class="section-label">Importar relatório de comissão</div>'+
+      '<p class="row-sub" style="margin-bottom:.7rem">Selecione a operadora e anexe o relatório (.csv) recebido. O sistema lê e mostra uma prévia — nada é salvo até você confirmar.</p>'+
+      '<form id="importarComissaoForm">'+
+        '<div class="field"><label>Operadora</label><select name="operadora" required><option value="">Selecione...</option>'+opts+'</select></div>'+
+        '<div class="field"><label>Arquivo do relatório (.csv)</label>'+
+          '<label class="attach-mock" for="comissaoArquivoInput">'+ic('upload')+'<span id="comissaoArquivoLabel">Toque para anexar o relatório</span></label>'+
+          '<input type="file" id="comissaoArquivoInput" accept=".csv,.txt" hidden required />'+
+        '</div>'+
+        '<button type="submit" class="btn btn-primary">'+ic('chev')+' Analisar arquivo</button>'+
+      '</form>'+
+      '<button type="button" class="btn btn-ghost" style="margin-top:.5rem" data-conciliacao-mode="lista">Cancelar</button>'+
+    '</div>';
+  }
+
+  function viewPreviewImportacao(){
+    var p = conciliacaoPreview, r = p.resumo;
+    var badgeFor = function(c){
+      if(c.statusPrevisto==='novo') return '<span class="chip chip-info">Novo — precisa de valor base</span>';
+      if(c.statusPrevisto==='pendente_baseline') return '<span class="chip chip-warn">Aguardando valor base</span>';
+      if(c.statusPrevisto==='valor_divergente') return '<span class="chip chip-crit">Diferença de '+fmtMoney(Math.abs(c.diferenca))+'</span>';
+      return '<span class="chip chip-ok">Bate com o esperado</span>';
+    };
+    var linhasHtml = p.classificadas.map(function(c){
+      return '<div class="row-card" style="cursor:default; margin-bottom:.5rem; padding:.6rem .7rem"><div class="row-top">'+
+        '<div><div class="row-title" style="font-size:.85rem">'+c.linha.nomeCliente+'</div>'+
+        '<div class="row-sub mono" style="font-size:.72rem">'+(c.linha.competencia||'—')+' · '+fmtMoney(c.linha.valorComissao)+'</div></div>'+badgeFor(c)+'</div></div>';
+    }).join('');
+    var faltantesHtml = p.faltantes.map(function(a){
+      return '<div class="row-card" style="cursor:default; margin-bottom:.5rem; padding:.6rem .7rem"><div class="row-top">'+
+        '<div><div class="row-title" style="font-size:.85rem">'+a.nomeCliente+'</div><div class="row-sub" style="font-size:.72rem">última parcela vista: '+(a.ultimaCompetencia||'—')+'</div></div>'+
+        '<span class="chip chip-crit">Sumiu desse relatório</span></div></div>';
+    }).join('');
+    return '<div class="content-pad">'+
+      '<div class="section-label">Prévia — '+operadoraLabel(p.operadora)+'</div>'+
+      '<p class="row-sub" style="margin-bottom:.7rem">'+p.nomeArquivo+' · '+p.classificadas.length+' linha(s) lida(s), total '+fmtMoney(r.totalComissao)+'</p>'+
+      '<div class="stat-grid">'+
+        '<div class="stat-tile"><div class="n">'+r.novos+'</div><div class="l">Clientes novos</div></div>'+
+        '<div class="stat-tile"><div class="n">'+r.pendentes+'</div><div class="l">Aguardando valor base</div></div>'+
+        '<div class="stat-tile"><div class="n">'+r.ok+'</div><div class="l">Batendo certinho</div></div>'+
+        '<div class="stat-tile"><div class="n" style="color:'+((r.divergentes+r.faltantes)?'var(--critical)':'inherit')+'">'+(r.divergentes+r.faltantes)+'</div><div class="l">Precisam de revisão</div></div>'+
+      '</div>'+
+      (p.faltantes.length ? '<div class="section-label" style="margin-top:1rem">Sumiram desse relatório ('+p.faltantes.length+')</div>'+faltantesHtml : '')+
+      '<div class="section-label" style="margin-top:1rem">Linhas do relatório</div>'+
+      linhasHtml+
+      '<div class="btn-row" style="margin-top:1rem">'+
+        '<button class="btn btn-primary" data-conciliacao-action="confirmar">'+ic('check')+' Confirmar importação</button>'+
+        '<button class="btn btn-ghost" data-conciliacao-action="cancelar">Cancelar</button>'+
+      '</div>'+
+    '</div>';
+  }
+
+  function handleImportarComissaoSubmit(e){
+    e.preventDefault();
+    var form = e.target;
+    var operadora = form.operadora.value;
+    var fileInput = document.getElementById('comissaoArquivoInput');
+    var file = fileInput && fileInput.files && fileInput.files[0];
+    if(!operadora || !file) return;
+    var btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    readFileAsText(file).then(function(text){
+      var linhas = parseRelatorioComissao(operadora, text);
+      if(!linhas.length){ btn.disabled=false; showToast('Não consegui reconhecer nenhuma linha nesse arquivo — confira se é a operadora certa.'); return; }
+      conciliacaoPreview = montarPreviewImportacao(operadora, file.name, linhas);
+      renderContent();
+    }).catch(function(){ btn.disabled=false; showToast('Não consegui ler esse arquivo — tente de novo.'); });
+  }
+
+  function montarPreviewImportacao(operadora, nomeArquivo, linhas){
+    var porIdentificador = {};
+    STATE.comissaoAcompanhamentos.forEach(function(a){ if(a.operadora===operadora) porIdentificador[a.identificador] = a; });
+    var vistos = {};
+    var classificadas = linhas.map(function(l){
+      var existente = porIdentificador[l.identificador];
+      vistos[l.identificador] = true;
+      var statusPrevisto, diferenca = null;
+      if(!existente){
+        statusPrevisto = 'novo';
+      } else if(existente.status==='pendente_baseline' || existente.valorMensalidade==null || existente.percentualComissao==null){
+        statusPrevisto = 'pendente_baseline';
+      } else {
+        var esperado = Math.round(existente.valorMensalidade * existente.percentualComissao / 100 * 100) / 100;
+        diferenca = Math.round((l.valorComissao - esperado) * 100) / 100;
+        statusPrevisto = Math.abs(diferenca) <= TOLERANCIA_COMISSAO ? 'ok' : 'valor_divergente';
+      }
+      return { linha: l, acompanhamentoId: existente ? existente.id : null, statusPrevisto: statusPrevisto, diferenca: diferenca };
+    });
+    var faltantes = STATE.comissaoAcompanhamentos.filter(function(a){
+      return a.operadora===operadora && a.status!=='cancelado' && !vistos[a.identificador];
+    });
+    return {
+      operadora: operadora, nomeArquivo: nomeArquivo, classificadas: classificadas, faltantes: faltantes,
+      resumo: {
+        novos: classificadas.filter(function(c){return c.statusPrevisto==='novo';}).length,
+        pendentes: classificadas.filter(function(c){return c.statusPrevisto==='pendente_baseline';}).length,
+        ok: classificadas.filter(function(c){return c.statusPrevisto==='ok';}).length,
+        divergentes: classificadas.filter(function(c){return c.statusPrevisto==='valor_divergente';}).length,
+        faltantes: faltantes.length,
+        totalComissao: linhas.reduce(function(s,l){return s+(l.valorComissao||0);}, 0)
+      }
+    };
+  }
+
+  function confirmarImportacaoComissao(){
+    var p = conciliacaoPreview;
+    var agora = new Date().toISOString();
+    var competenciaLote = modaCompetencia(p.classificadas.map(function(c){return c.linha;}));
+    var novosPorIdentificador = {};
+    var criarNovos = p.classificadas.filter(function(c){ return !c.acompanhamentoId; });
+    var criarPromise = criarNovos.length
+      ? sb.from('comissao_acompanhamentos').insert(criarNovos.map(function(c){
+          return { operadora: p.operadora, identificador: c.linha.identificador, nome_cliente: c.linha.nomeCliente, status: 'pendente_baseline' };
+        })).select().then(function(res){
+          if(res.error) throw res.error;
+          (res.data||[]).forEach(function(row){ novosPorIdentificador[row.identificador] = row; });
+        })
+      : Promise.resolve();
+
+    return criarPromise.then(function(){
+      return sb.from('comissao_relatorios').insert({
+        operadora: p.operadora, nome_arquivo: p.nomeArquivo, competencia_detectada: competenciaLote,
+        total_linhas: p.classificadas.length, total_valor_comissao: p.resumo.totalComissao, enviado_por: perfil.id
+      }).select().single();
+    }).then(function(relRes){
+      if(relRes.error) throw relRes.error;
+      var relatorioId = relRes.data.id;
+      var linhasInsert = [], updates = [], historicos = [];
+      p.classificadas.forEach(function(c){
+        var acompId = c.acompanhamentoId || (novosPorIdentificador[c.linha.identificador] && novosPorIdentificador[c.linha.identificador].id);
+        if(!acompId) return;
+        linhasInsert.push({
+          relatorio_id: relatorioId, acompanhamento_id: acompId, parcela_numero: c.linha.parcelaNumero,
+          competencia: c.linha.competencia, valor_base: c.linha.valorBase, percentual: c.linha.percentual,
+          valor_comissao: c.linha.valorComissao, data_pagamento: c.linha.dataPagamento, divergencia: c.diferenca
+        });
+        var novoStatus = c.statusPrevisto==='novo' ? 'pendente_baseline' : c.statusPrevisto;
+        updates.push({ id: acompId, payload: {
+          status: novoStatus, ultima_parcela_numero: c.linha.parcelaNumero, ultima_competencia: c.linha.competencia,
+          ultimo_valor_base: c.linha.valorBase, ultimo_percentual: c.linha.percentual, ultimo_valor_comissao: c.linha.valorComissao,
+          ultima_data_relatorio: c.linha.dataPagamento || new Date().toISOString().slice(0,10), updated_at: agora
+        }});
+        if(novoStatus==='valor_divergente'){
+          historicos.push({ entidade_tipo:'comissao', entidade_id:acompId, created_by:perfil.id, texto:
+            'Relatório de '+(c.linha.competencia||'—')+': recebido '+fmtMoney(c.linha.valorComissao)+', esperado aproximadamente '+fmtMoney(c.linha.valorComissao-c.diferenca)+' — diferença de '+fmtMoney(Math.abs(c.diferenca))+'.' });
+        } else if(c.statusPrevisto==='novo'){
+          historicos.push({ entidade_tipo:'comissao', entidade_id:acompId, created_by:perfil.id, texto:
+            'Primeira parcela vista neste relatório ('+p.nomeArquivo+') — falta cadastrar o valor da mensalidade e o percentual de comissão.' });
+        } else if(novoStatus==='ok'){
+          historicos.push({ entidade_tipo:'comissao', entidade_id:acompId, created_by:perfil.id, texto:
+            'Parcela de '+(c.linha.competencia||'—')+' conferida: '+fmtMoney(c.linha.valorComissao)+', dentro do esperado.' });
+        }
+      });
+      p.faltantes.forEach(function(a){
+        updates.push({ id: a.id, payload: { status:'parcela_faltante', updated_at: agora } });
+        historicos.push({ entidade_tipo:'comissao', entidade_id:a.id, created_by:perfil.id, texto:
+          'Não apareceu no relatório '+p.nomeArquivo+' ('+(competenciaLote||'—')+') — última parcela vista foi '+(a.ultimaCompetencia||'—')+'.' });
+      });
+
+      var linhasPromise = linhasInsert.length ? sb.from('comissao_linhas').insert(linhasInsert) : Promise.resolve();
+      var updatesPromise = Promise.all(updates.map(function(u){ return sb.from('comissao_acompanhamentos').update(u.payload).eq('id', u.id); }));
+      var historicosPromise = historicos.length ? sb.from('historico').insert(historicos) : Promise.resolve();
+      return Promise.all([linhasPromise, updatesPromise, historicosPromise]);
+    }).then(function(){
+      showToast('Relatório importado');
+      conciliacaoPreview = null; conciliacaoMode = 'lista';
+      return refreshData();
+    }).then(function(){
+      renderAppBar(); renderBottomTabbar(); renderContent();
+    });
+  }
+
+  /* ============== COACHING COMERCIAL COM IA ==============
+     Vendedor registra como foi o atendimento a um lead; um agente de IA de
+     verdade (chamado através da Edge Function "comercial-ia", que fala com o
+     Gemini no servidor) conversa com o vendedor — até 6 perguntas — pra
+     sugerir técnicas de venda e um posicionamento melhor pra ESSE lead. */
+
+  // Mascote desenhado só em SVG (sem imagem externa) — magro, terno e
+  // gravata azul-marinho, camisa branca — com uma classe "blink" que pisca
+  // via CSS (@keyframes coachBlink) pra parecer vivo no balão de fala.
+  var MASCOTE_SVG =
+    '<svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'+
+      '<ellipse cx="50" cy="126" rx="28" ry="4" fill="#0F2E27" opacity=".1"/>'+
+      '<path d="M20 130 C20 94 29 81 50 81 C71 81 80 94 80 130 Z" fill="#1B2A4A"/>'+
+      '<path d="M37 87 L50 110 L63 87 L63 130 L37 130 Z" fill="#FFFFFF"/>'+
+      '<path d="M45.5 89 L54.5 89 L58 99 L50 113 L42 99 Z" fill="#3B6FB2"/>'+
+      '<path d="M37 87 L26 101 L39 119 L44 99 Z" fill="#16223B"/>'+
+      '<path d="M63 87 L74 101 L61 119 L56 99 Z" fill="#16223B"/>'+
+      '<rect x="42" y="68" width="16" height="20" rx="6" fill="#E8B48C"/>'+
+      '<circle cx="50" cy="49" r="23" fill="#EFC09A"/>'+
+      '<path d="M27 46 C27 28 73 28 73 46 C73 35 64 27 50 27 C36 27 27 35 27 46 Z" fill="#2E2118"/>'+
+      '<path d="M27 44 C25 38 29 32 29 32 L27 46 Z" fill="#2E2118"/>'+
+      '<path d="M73 44 C75 38 71 32 71 32 L73 46 Z" fill="#2E2118"/>'+
+      '<g class="blink">'+
+        '<ellipse cx="41.5" cy="49" rx="2.2" ry="2.7" fill="#20140D"/>'+
+        '<ellipse cx="58.5" cy="49" rx="2.2" ry="2.7" fill="#20140D"/>'+
+      '</g>'+
+      '<path d="M41 58.5 Q50 65 59 58.5" stroke="#8A5A3B" stroke-width="2.2" fill="none" stroke-linecap="round"/>'+
+    '</svg>';
+
+  function leadContextoParaIa(lead){
+    var stage = LEAD_STAGES.find(function(s){return s.key===lead.etapa;});
+    return {
+      nome: lead.nome, empresa: lead.empresa!=='—' ? lead.empresa : null,
+      tipoNegocio: lead.tipo!=='—' ? lead.tipo : null, valorEstimado: lead.valor>0 ? lead.valor : null,
+      etapa: stage ? stage.label : null
+    };
+  }
+
+  function openRegistrarAtendimento(leadId){
+    var lead = STATE.leads.find(function(l){return l.id===leadId;});
+    if(!lead) return;
+    var html = '<h3>Registrar atendimento</h3>'+
+      '<p class="row-sub" style="margin-bottom:.8rem">Conta rapidamente como foi essa interação com <b>'+lead.nome+'</b> — o coach de IA vai te ajudar a melhorar a abordagem com esse lead.</p>'+
+      '<form id="atendimentoFeedbackForm">'+
+        '<div class="field"><label>O que aconteceu nessa conversa?</label><textarea name="feedback" rows="4" placeholder="Ex: liguei apresentando o plano, ele achou o valor alto perto do que paga hoje e disse que ia pensar com a esposa..." required></textarea></div>'+
+        '<button type="submit" class="btn btn-primary">'+ic('sparkles')+' Enviar pro coach de IA</button>'+
+      '</form>';
+    openSheet(html);
+    var form = document.getElementById('atendimentoFeedbackForm');
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var btn = form.querySelector('button[type=submit]');
+      btn.disabled = true;
+      var feedbackTexto = form.feedback.value.trim();
+      sb.from('lead_atendimentos').insert({ lead_id: leadId, vendedor_id: perfil.id, feedback_texto: feedbackTexto })
+        .select().single().then(function(res){
+          if(res.error) throw res.error;
+          chatSession = {
+            atendimentoId: res.data.id, leadId: leadId, leadNome: lead.nome, feedbackTexto: feedbackTexto,
+            mensagens: [], perguntasFeitas: 0, concluido: false, resultado: null, aguardandoIa: true, somenteLeitura: false, erro: false
+          };
+          renderChatSheet();
+          return avancarConversaIa(lead);
+        }).catch(function(){ btn.disabled=false; showToast('Não deu — tente de novo'); });
+    });
+  }
+
+  function avancarConversaIa(lead){
+    chatSession.aguardandoIa = true;
+    chatSession.erro = false;
+    renderChatSheet();
+    return sb.functions.invoke('comercial-ia', { body: {
+      leadContexto: leadContextoParaIa(lead),
+      feedbackTexto: chatSession.feedbackTexto,
+      historicoConversa: chatSession.mensagens.map(function(m){ return {papel:m.papel, texto:m.texto}; }),
+      perguntasFeitas: chatSession.perguntasFeitas
+    }}).then(function(res){
+      if(res.error) throw res.error;
+      var resp = res.data;
+      if(resp && resp.tipo==='pergunta' && resp.texto){
+        var ordem = chatSession.mensagens.length + 1;
+        return sb.from('lead_atendimento_mensagens').insert({ atendimento_id: chatSession.atendimentoId, papel:'ia', texto: resp.texto, ordem: ordem })
+          .then(function(){ return sb.from('lead_atendimentos').update({ total_perguntas_ia: chatSession.perguntasFeitas+1, updated_at: new Date().toISOString() }).eq('id', chatSession.atendimentoId); })
+          .then(function(){
+            chatSession.mensagens.push({papel:'ia', texto:resp.texto});
+            chatSession.perguntasFeitas += 1;
+            chatSession.aguardandoIa = false;
+            renderChatSheet();
+          });
+      }
+      var resultado = {
+        resumo: (resp&&resp.resumo) || '', sugestoes: (resp&&resp.sugestoes) || '',
+        posicionamento: (resp&&resp.posicionamento) || '', tecnica: (resp&&resp.tecnica) || ''
+      };
+      return sb.from('lead_atendimentos').update({
+        status:'concluido', resumo_final: resultado.resumo, sugestoes_finais: resultado.sugestoes,
+        posicionamento_sugerido: resultado.posicionamento, tecnica_recomendada: resultado.tecnica, updated_at: new Date().toISOString()
+      }).eq('id', chatSession.atendimentoId)
+        .then(function(){
+          var textoHistorico = 'Atendimento registrado.' + (resultado.tecnica ? ' Técnica sugerida pela IA: '+resultado.tecnica+'.' : '') + (resultado.posicionamento ? ' Posicionamento: '+resultado.posicionamento : '');
+          return addHistorico('lead', chatSession.leadId, textoHistorico);
+        })
+        .then(function(){
+          chatSession.concluido = true;
+          chatSession.resultado = resultado;
+          chatSession.aguardandoIa = false;
+          renderChatSheet();
+          return refreshData();
+        });
+    }).catch(function(){
+      chatSession.aguardandoIa = false;
+      chatSession.erro = true;
+      renderChatSheet();
+    });
+  }
+
+  function handleResponderAtendimento(e){
+    e.preventDefault();
+    if(!chatSession || chatSession.aguardandoIa) return;
+    var form = e.target;
+    var texto = form.resposta.value.trim();
+    if(!texto) return;
+    var lead = STATE.leads.find(function(l){return l.id===chatSession.leadId;});
+    var ordem = chatSession.mensagens.length + 1;
+    chatSession.aguardandoIa = true;
+    renderChatSheet();
+    sb.from('lead_atendimento_mensagens').insert({ atendimento_id: chatSession.atendimentoId, papel:'vendedor', texto: texto, ordem: ordem })
+      .then(function(){
+        chatSession.mensagens.push({papel:'vendedor', texto:texto});
+        return avancarConversaIa(lead);
+      }).catch(function(){ chatSession.aguardandoIa=false; chatSession.erro=true; renderChatSheet(); });
+  }
+
+  function renderChatSheet(){
+    if(!chatSession) return;
+    var thread = chatSession.mensagens.map(function(m){
+      return '<div class="coach-msg '+m.papel+'">'+m.texto+'</div>';
+    }).join('');
+
+    var bubbleHtml;
+    if(chatSession.aguardandoIa){
+      bubbleHtml = '<div class="coach-bubble thinking"><span class="coach-dot"></span><span class="coach-dot"></span><span class="coach-dot"></span></div>';
+    } else if(chatSession.erro){
+      bubbleHtml = '<div class="coach-bubble">Não consegui falar com a IA agora. Pode tentar de novo?</div>';
+    } else if(chatSession.concluido){
+      bubbleHtml = '<div class="coach-bubble">Prontinho — separei umas ideias pra esse lead aqui embaixo.</div>';
+    } else {
+      var ultima = chatSession.mensagens.length ? chatSession.mensagens[chatSession.mensagens.length-1] : null;
+      bubbleHtml = '<div class="coach-bubble">'+((ultima&&ultima.papel==='ia') ? ultima.texto : 'Vamos conversar sobre esse atendimento.')+'</div>';
+    }
+
+    var finalHtml = '';
+    if(chatSession.concluido && chatSession.resultado){
+      var r = chatSession.resultado;
+      finalHtml = '<div class="coach-final">'+
+        (r.resumo ? '<div><div class="lbl">Resumo</div><div class="tx">'+r.resumo+'</div></div>' : '')+
+        (r.posicionamento ? '<div><div class="lbl">Posicionamento sugerido</div><div class="tx">'+r.posicionamento+'</div></div>' : '')+
+        (r.sugestoes ? '<div><div class="lbl">Sugestões de abordagem</div><div class="tx">'+r.sugestoes+'</div></div>' : '')+
+        (r.tecnica ? '<div><div class="lbl">Técnica recomendada</div><div class="tx">'+ic('sparkles')+' '+r.tecnica+'</div></div>' : '')+
+      '</div>';
+    }
+
+    var progresso = (!chatSession.concluido && !chatSession.somenteLeitura) ? '<div class="coach-progress">Pergunta '+Math.min(chatSession.perguntasFeitas, 6)+' de até 6</div>' : '';
+
+    var formHtml;
+    if(chatSession.concluido){
+      formHtml = '<button type="button" class="btn btn-ghost" id="atendimentoFecharBtn" style="margin-top:.5rem">Fechar</button>';
+    } else if(chatSession.somenteLeitura){
+      formHtml = '<p class="row-sub" style="margin-top:.3rem">Aguardando resposta do vendedor.</p>'+
+        '<button type="button" class="btn btn-ghost" id="atendimentoFecharBtn" style="margin-top:.5rem">Fechar</button>';
+    } else {
+      formHtml = '<form id="atendimentoRespostaForm" style="display:flex; flex-direction:column; gap:.5rem; margin-top:.3rem">'+
+        '<textarea name="resposta" rows="2" placeholder="Sua resposta..." required '+(chatSession.aguardandoIa?'disabled':'')+'></textarea>'+
+        '<button type="submit" class="btn btn-primary" '+(chatSession.aguardandoIa?'disabled':'')+'>'+ic('chev')+' Responder</button>'+
+      '</form>';
+    }
+
+    var html = '<h3>Coach de vendas</h3>'+
+      '<p class="row-sub" style="margin-bottom:.7rem">Sobre o atendimento a <b>'+chatSession.leadNome+'</b></p>'+
+      '<div class="coach-wrap">'+
+        '<div class="coach-header"><div class="coach-avatar">'+MASCOTE_SVG+'</div>'+bubbleHtml+'</div>'+
+        (thread ? '<div class="coach-thread">'+thread+'</div>' : '')+
+        progresso+
+        finalHtml+
+        formHtml+
+      '</div>';
+    openSheet(html);
+
+    var respForm = document.getElementById('atendimentoRespostaForm');
+    if(respForm) respForm.addEventListener('submit', handleResponderAtendimento);
+    var fecharBtn = document.getElementById('atendimentoFecharBtn');
+    if(fecharBtn) fecharBtn.addEventListener('click', function(){ chatSession=null; closeSheet(); renderContent(); });
+  }
+
+  function openAtendimentoDetail(id){
+    var a = STATE.leadAtendimentos.find(function(x){return x.id===id;});
+    if(!a) return;
+    var podeResponder = a.vendedorId===perfil.id && a.status==='em_andamento';
+    chatSession = {
+      atendimentoId:a.id, leadId:a.leadId, leadNome:a.leadNome, feedbackTexto:a.feedbackTexto,
+      mensagens: a.mensagens.map(function(m){return {papel:m.papel, texto:m.texto};}),
+      perguntasFeitas: a.totalPerguntasIa, concluido: a.status==='concluido',
+      resultado: a.status==='concluido' ? {resumo:a.resumoFinal, sugestoes:a.sugestoesFinais, posicionamento:a.posicionamentoSugerido, tecnica:a.tecnicaRecomendada} : null,
+      aguardandoIa:false, erro:false, somenteLeitura: a.status==='em_andamento' && !podeResponder
+    };
+    renderChatSheet();
+  }
+
+  function viewCoachingIa(){
+    var todos = STATE.leadAtendimentos;
+    var filtro = coachingFiltroStatus;
+    var itens = todos.filter(function(a){
+      if(filtro==='todos') return true;
+      return a.status===filtro;
+    });
+    var emAndamentoCount = todos.filter(function(a){return a.status==='em_andamento';}).length;
+    var chipsFiltro = [
+      {k:'todos', l:'Todos ('+todos.length+')'},
+      {k:'em_andamento', l:'Em andamento ('+emAndamentoCount+')'},
+      {k:'concluido', l:'Concluídos'}
+    ].map(function(c){
+      return '<button class="chip '+(filtro===c.k?'chip-gold':'chip-neutral')+'" style="border:none;cursor:pointer" data-coaching-filtro="'+c.k+'">'+c.l+'</button>';
+    }).join(' ');
+    var listHtml = itens.length ? itens.map(function(a){
+      var statusChip = a.status==='concluido' ? '<span class="chip chip-ok">'+ic('check')+' Concluído</span>' : '<span class="chip chip-warn">'+ic('clock')+' Em andamento</span>';
+      return '<button class="row-card" data-open="atendimento:'+a.id+'" style="margin-bottom:.6rem; display:block; width:100%; text-align:left"><div class="row-top">'+
+        '<div><div class="row-title">'+a.leadNome+'</div><div class="row-sub">'+a.vendedorNome+' · '+fmtDateHoraBR(a.createdAt)+'</div></div>'+statusChip+'</div>'+
+        (a.tecnicaRecomendada ? '<div class="row-sub" style="margin-top:.35rem">'+ic('sparkles')+' '+a.tecnicaRecomendada+'</div>' : '')+
+      '</button>';
+    }).join('') : '<div class="empty-col">Nenhum atendimento registrado ainda.</div>';
+    return '<div class="content-pad">'+
+      '<div class="section-label">Coaching comercial com IA</div>'+
+      '<p class="row-sub" style="margin-bottom:.7rem">Feedbacks que os vendedores registraram sobre os atendimentos, e as sugestões que a IA deu em cima de cada um.</p>'+
+      '<div style="display:flex;gap:.4rem;margin-bottom:.8rem;flex-wrap:wrap">'+chipsFiltro+'</div>'+
+      listHtml+
+    '</div>';
+  }
+
   /* ============== VIEW: Painéis do financeiro (comissões, reajuste, inadimplência) ============== */
   function viewPaineisFinanceiro(){
     if(painelFinMode==='novo-contrato') return viewNovoContrato();
@@ -2181,6 +3020,105 @@
     if(type==='pv') return openPvDetail(id, true);
     if(type==='pv-ext') return openPvDetail(id, false);
     if(type==='contrato') return openContratoDetail(id);
+    if(type==='comissao') return openComissaoDetail(id);
+    if(type==='atendimento') return openAtendimentoDetail(id);
+  }
+
+  function openComissaoDetail(id){
+    var a = STATE.comissaoAcompanhamentos.find(function(x){return x.id===id;});
+    if(!a) return;
+    var st = COMISSAO_STATUS_LABEL[a.status] || COMISSAO_STATUS_LABEL.ok;
+    var html = '<h3>'+a.nomeCliente+'</h3><p class="row-sub" style="margin-bottom:.7rem">'+operadoraLabel(a.operadora)+' · identificador '+a.identificador+'</p>'+
+      '<div class="kv"><span class="k">Status</span><span class="v"><span class="chip '+st.cls+'">'+ic(st.ic)+' '+st.label+'</span></span></div>';
+    if(a.valorMensalidade!=null){
+      html += '<div class="kv"><span class="k">Mensalidade cadastrada</span><span class="v mono">'+fmtMoney(a.valorMensalidade)+'</span></div>'+
+        '<div class="kv"><span class="k">% comissão cadastrado</span><span class="v">'+a.percentualComissao+'%</span></div>'+
+        '<div class="kv"><span class="k">Ciclo</span><span class="v">'+a.cicloMeses+' meses</span></div>';
+    }
+    if(a.ultimaCompetencia){
+      html += '<div class="kv"><span class="k">Última parcela vista</span><span class="v">'+a.ultimaCompetencia+' · '+fmtMoney(a.ultimoValorComissao)+'</span></div>';
+    }
+    html += '<div class="section-label" style="margin-top:1rem">Histórico</div>'+timelineHtml(a.historico);
+
+    if(a.status==='pendente_baseline'){
+      html += '<div class="section-label" style="margin-top:1rem">Cadastrar valor base</div>'+
+        '<form id="comissaoBaselineForm">'+
+          '<div class="field"><label>Valor da mensalidade (R$)</label><input type="number" name="valorMensalidade" min="0" step="0.01" required value="'+(a.ultimoValorBase!=null?a.ultimoValorBase:'')+'" /></div>'+
+          '<div class="field"><label>Percentual de comissão (%)</label><input type="number" name="percentual" min="0" step="0.01" required value="'+(a.ultimoPercentual!=null?a.ultimoPercentual:'')+'" /></div>'+
+          '<div class="field"><label>Ciclo (meses até reavaliar)</label><select name="ciclo"><option value="12" selected>12 meses</option><option value="24">24 meses</option></select></div>'+
+          '<button type="submit" class="btn btn-primary">'+ic('check')+' Salvar e confirmar</button>'+
+        '</form>';
+    } else if(a.status==='valor_divergente' || a.status==='parcela_faltante'){
+      html += '<div class="section-label" style="margin-top:1rem">Dar baixa neste alerta</div>'+
+        '<form id="comissaoBaixaForm">'+
+          '<div class="field"><label>O que foi verificado?</label><textarea name="nota" rows="2" placeholder="Ex: confirmado reajuste por faixa etária, cliente ok" required></textarea></div>'+
+          '<button type="submit" class="btn btn-primary">'+ic('check')+' Baixar — voltar ao normal</button>'+
+        '</form>'+
+        (a.status==='parcela_faltante' ? '<div class="btn-row" style="margin-top:.5rem"><button class="btn btn-danger" data-action="comissao-cancelar" data-id="'+id+'">'+ic('x')+' Confirmar cancelamento — parar de acompanhar</button></div>' : '')+
+        '<div class="section-label" style="margin-top:1rem">Ajustar valor base (ex: mudança de faixa etária)</div>'+
+        '<form id="comissaoAjustarForm">'+
+          '<div class="field"><label>Nova mensalidade (R$)</label><input type="number" name="valorMensalidade" min="0" step="0.01" required value="'+(a.valorMensalidade!=null?a.valorMensalidade:'')+'" /></div>'+
+          '<div class="field"><label>Percentual de comissão (%)</label><input type="number" name="percentual" min="0" step="0.01" required value="'+(a.percentualComissao!=null?a.percentualComissao:'')+'" /></div>'+
+          '<button type="submit" class="btn btn-ghost">'+ic('check')+' Salvar novo valor base</button>'+
+        '</form>';
+    } else if(a.status==='ok'){
+      html += '<div class="btn-row" style="margin-top:1rem"><button class="btn btn-ghost" data-action="comissao-cancelar" data-id="'+id+'">'+ic('x')+' Marcar como cancelado</button></div>';
+    } else if(a.status==='cancelado'){
+      html += '<div class="btn-row" style="margin-top:1rem"><button class="btn btn-ghost" data-action="comissao-reativar" data-id="'+id+'">Reativar acompanhamento</button></div>';
+    }
+    openSheet(html);
+    bindSheetActions();
+
+    var baselineForm = document.getElementById('comissaoBaselineForm');
+    if(baselineForm){
+      baselineForm.addEventListener('submit', function(e){
+        e.preventDefault();
+        var btn = baselineForm.querySelector('button[type=submit]');
+        btn.disabled = true;
+        var valorMensalidade = parseFloat(baselineForm.valorMensalidade.value);
+        var percentual = parseFloat(baselineForm.percentual.value);
+        var ciclo = parseInt(baselineForm.ciclo.value, 10);
+        sb.from('comissao_acompanhamentos').update({
+          valor_mensalidade: valorMensalidade, percentual_comissao: percentual, ciclo_meses: ciclo,
+          status: 'ok', baseline_definida_em: new Date().toISOString(), baseline_definida_por: perfil.id, updated_at: new Date().toISOString()
+        }).eq('id', id)
+          .then(function(){ return addHistorico('comissao', id, 'Valor base definido: '+fmtMoney(valorMensalidade)+' · '+percentual+'% · ciclo de '+ciclo+' meses.'); })
+          .then(function(){ showToast('Valor base salvo'); closeSheet(); return refreshData(); })
+          .then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); })
+          .catch(function(){ btn.disabled=false; showToast('Não deu — tente de novo'); });
+      });
+    }
+    var baixaForm = document.getElementById('comissaoBaixaForm');
+    if(baixaForm){
+      baixaForm.addEventListener('submit', function(e){
+        e.preventDefault();
+        var btn = baixaForm.querySelector('button[type=submit]');
+        btn.disabled = true;
+        var nota = baixaForm.nota.value.trim();
+        sb.from('comissao_acompanhamentos').update({ status:'ok', updated_at:new Date().toISOString() }).eq('id', id)
+          .then(function(){ return addHistorico('comissao', id, 'Baixa dada: '+nota); })
+          .then(function(){ showToast('Alerta resolvido'); closeSheet(); return refreshData(); })
+          .then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); })
+          .catch(function(){ btn.disabled=false; showToast('Não deu — tente de novo'); });
+      });
+    }
+    var ajustarForm = document.getElementById('comissaoAjustarForm');
+    if(ajustarForm){
+      ajustarForm.addEventListener('submit', function(e){
+        e.preventDefault();
+        var btn = ajustarForm.querySelector('button[type=submit]');
+        btn.disabled = true;
+        var valorMensalidade = parseFloat(ajustarForm.valorMensalidade.value);
+        var percentual = parseFloat(ajustarForm.percentual.value);
+        sb.from('comissao_acompanhamentos').update({
+          valor_mensalidade: valorMensalidade, percentual_comissao: percentual, status:'ok', updated_at: new Date().toISOString()
+        }).eq('id', id)
+          .then(function(){ return addHistorico('comissao', id, 'Valor base ajustado para '+fmtMoney(valorMensalidade)+' · '+percentual+'% (ex: mudança de faixa etária/reajuste).'); })
+          .then(function(){ showToast('Valor base atualizado'); closeSheet(); return refreshData(); })
+          .then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); })
+          .catch(function(){ btn.disabled=false; showToast('Não deu — tente de novo'); });
+      });
+    }
   }
 
   function timelineHtml(hist){
@@ -2205,6 +3143,24 @@
       html += '<div class="kv"><span class="k">Motivo da perda</span><span class="v">'+(MOTIVO_PERDA_LABEL[l.motivoPerda]||'—')+'</span></div>';
     }
     html += '<div class="section-label" style="margin-top:1rem">Histórico</div>'+timelineHtml(l.historico);
+
+    var atendimentosDoLead = STATE.leadAtendimentos.filter(function(a){return a.leadId===id;});
+    if(atendimentosDoLead.length || podeGerenciar){
+      html += '<div class="section-label" style="margin-top:1rem">Coaching de IA sobre esse lead</div>';
+      if(atendimentosDoLead.length){
+        html += atendimentosDoLead.map(function(a){
+          var st = a.status==='concluido' ? '<span class="chip chip-ok">'+ic('check')+' Concluído</span>' : '<span class="chip chip-warn">'+ic('clock')+' Em andamento</span>';
+          return '<button class="row-card" data-atendimento-abrir="'+a.id+'" style="margin-bottom:.5rem; display:block; width:100%; text-align:left; padding:.6rem .7rem">'+
+            '<div class="row-top"><div class="row-title" style="font-size:.85rem">'+fmtDateHoraBR(a.createdAt)+'</div>'+st+'</div>'+
+            (a.tecnicaRecomendada ? '<div class="row-sub" style="margin-top:.3rem">'+ic('sparkles')+' '+a.tecnicaRecomendada+'</div>' : '')+
+          '</button>';
+        }).join('');
+      }
+      if(podeGerenciar){
+        html += '<button class="btn btn-ghost" id="btnRegistrarAtendimento" style="margin-top:.2rem">'+ic('sparkles')+' Registrar atendimento e conversar com a IA</button>';
+      }
+    }
+
     if(podeGerenciar){
       html += '<div class="section-label" style="margin-top:1rem">Follow-up</div>'+
         '<form id="leadFollowupForm" class="btn-row" style="flex-direction:row">'+
@@ -2232,6 +3188,12 @@
     }
     openSheet(html);
     bindSheetActions();
+
+    document.querySelectorAll('[data-atendimento-abrir]').forEach(function(btn){
+      btn.addEventListener('click', function(){ openAtendimentoDetail(btn.dataset.atendimentoAbrir); });
+    });
+    var btnRegistrarAtendimento = document.getElementById('btnRegistrarAtendimento');
+    if(btnRegistrarAtendimento) btnRegistrarAtendimento.addEventListener('click', function(){ openRegistrarAtendimento(id); });
 
     var followupForm = document.getElementById('leadFollowupForm');
     if(followupForm){
@@ -2508,6 +3470,14 @@
           work = sb.from('solicitacoes').update({pendencia_doc:false, pendencia_descricao:null}).eq('id', id)
             .then(function(){ return addHistorico('solicitacao', id, 'Pendência de documento resolvida.'); })
             .then(function(){ showToast('Pendência resolvida'); });
+        } else if(action==='comissao-cancelar'){
+          work = sb.from('comissao_acompanhamentos').update({status:'cancelado', updated_at:new Date().toISOString()}).eq('id', id)
+            .then(function(){ return addHistorico('comissao', id, 'Marcado como cancelado — parou de ser acompanhado.'); })
+            .then(function(){ showToast('Marcado como cancelado'); });
+        } else if(action==='comissao-reativar'){
+          work = sb.from('comissao_acompanhamentos').update({status:'ok', updated_at:new Date().toISOString()}).eq('id', id)
+            .then(function(){ return addHistorico('comissao', id, 'Reativado — voltando a ser acompanhado.'); })
+            .then(function(){ showToast('Reativado'); });
         } else {
           work = Promise.resolve();
         }
