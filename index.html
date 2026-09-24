@@ -5,6 +5,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --bg:#F7F5EC; --surface:#FFFFFF; --surface-2:#F0EDE1; --border:#E3DFCF;
@@ -670,18 +671,18 @@
   /* ============== PAPÉIS / ABAS (sem seletor livre — cada login já é um papel) ============== */
   var ROLES_META = {
     vendedor:{label:'Vendedor', tabs:[{key:'leads',label:'Leads',icon:'kanban'},{key:'nova-lead',label:'Novo lead',icon:'plus'},{key:'clientes',label:'Fechados',icon:'check'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'perfil',label:'Perfil',icon:'user'}]},
-    administrativo:{label:'Administrativo', tabs:[{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'financeiro',label:'Financeiro',icon:'coin'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'conciliacao',label:'Conciliação',icon:'upload'},{key:'coaching-ia',label:'Coaching IA',icon:'sparkles'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'visao-adm',label:'Visão geral',icon:'chart'}]},
-    posvendas:{label:'Pós-vendas', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'desempenho-pv',label:'Desempenho',icon:'chart'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'},{key:'recibos',label:'Recibos',icon:'coin'}]},
+    administrativo:{label:'Administrativo', tabs:[{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'financeiro',label:'Financeiro',icon:'coin'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'conciliacao',label:'Conciliação',icon:'upload'},{key:'coaching-ia',label:'Coaching IA',icon:'sparkles'},{key:'boletos',label:'Boletos',icon:'inbox'},{key:'recibos',label:'Recibos',icon:'coin'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'visao-adm',label:'Visão geral',icon:'chart'}]},
+    posvendas:{label:'Pós-vendas', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'desempenho-pv',label:'Desempenho',icon:'chart'},{key:'boletos',label:'Boletos',icon:'inbox'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'},{key:'recibos',label:'Recibos',icon:'coin'}]},
     rh:{label:'RH da Empresa', tabs:[{key:'minhas-rh',label:'Solicitações',icon:'list'},{key:'nova-rh',label:'Nova',icon:'plus'},{key:'desempenho-rh',label:'Desempenho',icon:'chart'},{key:'pendencias-rh',label:'Pendências',icon:'alert'}]},
     cliente:{label:'Cliente Final', tabs:[{key:'minhas-cli',label:'Meus pedidos',icon:'list'},{key:'pendencias-cli',label:'Pendências',icon:'alert'},{key:'nova-cli',label:'Novo pedido',icon:'plus'}]},
-    gestao:{label:'Gestão', tabs:[{key:'visao-geral',label:'Visão geral',icon:'chart'},{key:'departamentos',label:'Departamentos',icon:'kanban'},{key:'ranking-vendas',label:'Ranking vendas',icon:'chart'},{key:'conciliacao',label:'Conciliação',icon:'upload'},{key:'coaching-ia',label:'Coaching IA',icon:'sparkles'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'desempenho-pv',label:'Desemp. pós-vendas',icon:'chart'},{key:'alertas',label:'Alertas',icon:'alert'},{key:'recibos',label:'Recibos',icon:'coin'}]},
+    gestao:{label:'Gestão', tabs:[{key:'visao-geral',label:'Visão geral',icon:'chart'},{key:'departamentos',label:'Departamentos',icon:'kanban'},{key:'ranking-vendas',label:'Ranking vendas',icon:'chart'},{key:'conciliacao',label:'Conciliação',icon:'upload'},{key:'coaching-ia',label:'Coaching IA',icon:'sparkles'},{key:'boletos',label:'Boletos',icon:'inbox'},{key:'paineis',label:'Painéis',icon:'chart'},{key:'desempenho-pv',label:'Desemp. pós-vendas',icon:'chart'},{key:'alertas',label:'Alertas',icon:'alert'},{key:'recibos',label:'Recibos',icon:'coin'}]},
     implantacao:{label:'Implantação', tabs:[{key:'solicitacoes',label:'Solicitações',icon:'kanban'},{key:'desempenho-pv',label:'Desempenho',icon:'chart'},{key:'inclusao',label:'Inclusão',icon:'doc'},{key:'tarefas',label:'Tarefas',icon:'kanban'},{key:'clientes',label:'Fechados',icon:'check'},{key:'documentos',label:'Documentos',icon:'doc'},{key:'empresas',label:'Empresas',icon:'building'},{key:'recibos',label:'Recibos',icon:'coin'}]}
   };
 
   /* ============== ESTADO ============== */
   var session = null;
   var perfil = null; // {id, papel, nome, email, empresaId, empresaNome}
-  var STATE = { leads:[], tasks:[], posvendas:[], inclusaoPropostas:[], financeiro:[], recibosMensais:[], recibosLancamentos:[], equipeInterna:[], contratos:[], segurados:[], comissoes:[], empresasAll:[], comissaoAcompanhamentos:[], leadAtendimentos:[] };
+  var STATE = { leads:[], tasks:[], posvendas:[], inclusaoPropostas:[], financeiro:[], recibosMensais:[], recibosLancamentos:[], equipeInterna:[], contratos:[], segurados:[], comissoes:[], empresasAll:[], comissaoAcompanhamentos:[], leadAtendimentos:[], boletosPainel:[] };
   var posvendasFiltro = 'meus';
   var conciliacaoMode = 'lista'; // 'lista' | 'importar'
   var conciliacaoFiltroStatus = 'abertos';
@@ -697,6 +698,11 @@
   var painelFinTab = 'comissoes';
   var painelFinMode = 'lista'; // 'lista' | 'novo-contrato' | 'novo-segurado' | 'nova-comissao'
   var painelFinContratoId = null; // contrato em foco (pra "nova comissão"/"novo segurado" pré-preenchido)
+  var boletosMode = 'lista'; // 'lista' | 'importar'
+  var boletosFiltroStatus = 'todos'; // 'todos' | 'atencao' | 'incompleto' | 'pronto' | 'enviado'
+  var boletosFiltroOperadora = 'todas';
+  var boletosBusca = '';
+  var boletosImportPreview = null; // resultado da leitura da planilha, antes de confirmar
   var reajusteAvisoDias = 30;
   var lastTabByRole = {};
 
@@ -1012,6 +1018,7 @@
       case 'departamentos': html = viewDepartamentosGestao(); break;
       case 'alertas': html = viewAlertasGestao(); break;
       case 'recibos': html = viewRecibos(); break;
+      case 'boletos': html = viewBoletos(); break;
       case 'paineis': html = viewPaineisFinanceiro(); break;
       case 'desempenho-pv': html = viewDesempenhoPosvendas(); break;
       default: html = '<div class="content-pad">Em construção.</div>';
@@ -1161,6 +1168,81 @@
           el.disabled = true;
           confirmarImportacaoComissao().catch(function(){ el.disabled = false; showToast('Não deu pra importar — tente de novo'); });
         }
+      });
+    });
+
+    document.querySelectorAll('[data-boletos-mode]').forEach(function(el){
+      el.addEventListener('click', function(){
+        boletosMode = el.dataset.boletosMode;
+        if(boletosMode==='lista') boletosImportPreview = null;
+        renderContent();
+      });
+    });
+    document.querySelectorAll('[data-boletos-filtro]').forEach(function(el){
+      el.addEventListener('click', function(){ boletosFiltroStatus = el.dataset.boletosFiltro; renderContent(); });
+    });
+    var boletosBuscaInput = document.getElementById('boletosBuscaInput');
+    if(boletosBuscaInput) boletosBuscaInput.addEventListener('input', function(){
+      boletosBusca = boletosBuscaInput.value;
+      var pos = boletosBuscaInput.selectionStart;
+      renderContent();
+      var again = document.getElementById('boletosBuscaInput');
+      if(again){ again.focus(); again.setSelectionRange(pos,pos); }
+    });
+    var boletosOperadoraSelect = document.getElementById('boletosOperadoraSelect');
+    if(boletosOperadoraSelect) boletosOperadoraSelect.addEventListener('change', function(){
+      boletosFiltroOperadora = boletosOperadoraSelect.value; renderContent();
+    });
+    document.querySelectorAll('[data-boleto-upload-input]').forEach(function(el){
+      el.addEventListener('change', function(){
+        var file = el.files && el.files[0];
+        if(!file) return;
+        var contratoId = el.dataset.contratoId, competencia = el.dataset.competencia;
+        var path = 'contrato_'+contratoId+'/'+competencia+'_'+Date.now()+'_'+file.name;
+        el.disabled = true;
+        sb.storage.from('boletos').upload(path, file).then(function(upRes){
+          if(upRes.error){ el.disabled=false; showToast('Não deu pra enviar o PDF'); return; }
+          return sb.from('boletos').upsert({
+            contrato_id: contratoId, competencia: competencia, status: 'baixado',
+            storage_path: path, origem: 'manual', criado_por: perfil.id, updated_at: new Date().toISOString()
+          }, { onConflict: 'contrato_id,competencia' });
+        }).then(function(res){
+          if(res && res.error){ showToast('PDF enviado, mas não deu pra registrar — tente de novo'); return; }
+          showToast('Boleto anexado');
+          refreshData().then(renderContent);
+        });
+      });
+    });
+    document.querySelectorAll('[data-boleto-ver-pdf]').forEach(function(el){
+      el.addEventListener('click', function(){
+        sb.storage.from('boletos').createSignedUrl(el.dataset.boletoVerPdf, 300).then(function(res){
+          if(res.error || !res.data){ showToast('Não consegui abrir o PDF'); return; }
+          window.open(res.data.signedUrl, '_blank');
+        });
+      });
+    });
+    document.querySelectorAll('[data-boleto-enviar-agora]').forEach(function(el){
+      el.addEventListener('click', function(){
+        el.disabled = true;
+        sb.rpc('disparar_boleto_manual', { p_boleto_id: el.dataset.boletoEnviarAgora }).then(function(res){
+          if(res.error){ el.disabled=false; showToast(res.error.message || 'Não deu pra enviar'); return; }
+          showToast('Envio disparado — confira o status em alguns segundos');
+          refreshData().then(renderContent);
+        });
+      });
+    });
+    var boletosImportForm = document.getElementById('boletosImportForm');
+    if(boletosImportForm) boletosImportForm.addEventListener('submit', handleBoletosImportSubmit);
+    var boletosImportInput = document.getElementById('boletosImportInput');
+    if(boletosImportInput) boletosImportInput.addEventListener('change', function(){
+      var lbl = document.getElementById('boletosImportLabel');
+      if(lbl && boletosImportInput.files && boletosImportInput.files[0]) lbl.textContent = boletosImportInput.files[0].name;
+    });
+    document.querySelectorAll('[data-boletos-import-action]').forEach(function(el){
+      el.addEventListener('click', function(){
+        var action = el.dataset.boletosImportAction;
+        if(action==='cancelar'){ boletosImportPreview = null; boletosMode = 'lista'; renderContent(); return; }
+        if(action==='confirmar'){ el.disabled = true; confirmarImportacaoBoletos(); }
       });
     });
     document.querySelectorAll('[data-reajuste-aviso]').forEach(function(el){
@@ -1347,10 +1429,10 @@
   function refreshData(){
     var p = perfil.papel;
     if(p==='vendedor') return Promise.all([fetchLeads(), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchComissoes(), fetchLeadAtendimentos()]);
-    if(p==='administrativo') return Promise.all([fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes(), fetchComissaoAcompanhamentos(), fetchLeadAtendimentos()]);
-    if(p==='posvendas') return Promise.all([fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchEquipeInterna()]);
+    if(p==='administrativo') return Promise.all([fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes(), fetchComissaoAcompanhamentos(), fetchLeadAtendimentos(), fetchBoletosPainel(), fetchEmpresasAll()]);
+    if(p==='posvendas') return Promise.all([fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchEquipeInterna(), fetchBoletosPainel(), fetchEmpresasAll()]);
     if(p==='rh' || p==='cliente') return fetchPosvendas(false);
-    if(p==='gestao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes(), fetchEquipeInterna(), fetchComissaoAcompanhamentos(), fetchLeadAtendimentos()]);
+    if(p==='gestao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes(), fetchEquipeInterna(), fetchComissaoAcompanhamentos(), fetchLeadAtendimentos(), fetchBoletosPainel(), fetchEmpresasAll()]);
     if(p==='implantacao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchEquipeInterna()]);
     return Promise.resolve();
   }
@@ -1384,8 +1466,23 @@
   }
 
   function fetchEmpresasAll(){
-    return sb.from('empresas').select('id,nome').order('nome').then(function(res){
+    return sb.from('empresas').select('id,nome,cnpj').order('nome').then(function(res){
       STATE.empresasAll = res.error ? [] : (res.data||[]);
+    });
+  }
+
+  function fetchBoletosPainel(){
+    return sb.from('boletos_painel').select('*').order('dias_restantes', {ascending:true, nullsFirst:false}).then(function(res){
+      if(res.error){ STATE.boletosPainel = []; return; }
+      STATE.boletosPainel = (res.data||[]).map(function(r){
+        return {
+          contratoId:r.contrato_id, empresa:r.empresa, cnpj:r.cnpj, operadora:r.operadora, ramo:r.ramo,
+          diaVencimento:r.dia_vencimento_boleto, diasRestantes:r.dias_restantes, emailCobranca:r.email_cobranca,
+          contatoNome:r.contato_nome, telefone:r.telefone_contato, procedimento:r.portal_procedimento,
+          competenciaAtual:r.competencia_atual, boletoId:r.boleto_id, boletoStatus:r.boleto_status,
+          storagePath:r.storage_path, enviadoEm:r.enviado_em, cadastroIncompleto:r.cadastro_incompleto
+        };
+      });
     });
   }
 
@@ -1752,6 +1849,262 @@
           '<span class="chip '+(abertas?'chip-warn':'chip-ok')+'">'+abertas+' aberta(s)</span></div>'+
           (pend ? '<div class="pending-banner">'+ic('alert')+'<span>'+pend+' pendência(s) de documento em aberto</span></div>' : '')+'</div>';
       }).join('')+'</div></div>';
+  }
+
+  /* ============== VIEW: Boletos ============== */
+  function boletoStatusInfo(item){
+    if(item.cadastroIncompleto) return {label:'Cadastro incompleto', cls:'chip-warn', ic:'alert'};
+    if(item.boletoStatus==='enviado') return {label:'Enviado', cls:'chip-ok', ic:'check'};
+    if(item.boletoStatus==='enviando') return {label:'Enviando...', cls:'chip-gold', ic:'clock'};
+    if(item.boletoStatus==='erro') return {label:'Erro no envio — reenviar', cls:'chip-crit', ic:'alert'};
+    if(item.diasRestantes!=null && item.diasRestantes<0) return {label:'Atrasado '+Math.abs(item.diasRestantes)+'d', cls:'chip-crit', ic:'alert'};
+    if(item.boletoStatus==='baixado') return {label:'Pronto pra envio', cls:'chip-gold', ic:'clock'};
+    if(item.diasRestantes!=null && item.diasRestantes<=7) return {label:'Falta anexar — vence em '+item.diasRestantes+'d', cls:'chip-warn', ic:'clock'};
+    return {label:item.diasRestantes!=null ? ('Vence em '+item.diasRestantes+'d') : 'Sem data', cls:'chip-neutral', ic:'clock'};
+  }
+
+  function boletosFiltrados(){
+    var busca = (boletosBusca||'').toLowerCase().trim();
+    return STATE.boletosPainel.filter(function(item){
+      if(boletosFiltroOperadora!=='todas' && item.operadora!==boletosFiltroOperadora) return false;
+      if(busca && item.empresa.toLowerCase().indexOf(busca)===-1) return false;
+      if(boletosFiltroStatus==='todos') return true;
+      if(boletosFiltroStatus==='incompleto') return item.cadastroIncompleto;
+      if(boletosFiltroStatus==='atrasado') return !item.cadastroIncompleto && item.diasRestantes!=null && item.diasRestantes<0 && item.boletoStatus!=='enviado';
+      if(boletosFiltroStatus==='atencao') return !item.cadastroIncompleto && item.diasRestantes!=null && item.diasRestantes>=0 && item.diasRestantes<=7 && item.boletoStatus!=='enviado';
+      if(boletosFiltroStatus==='enviado') return item.boletoStatus==='enviado';
+      return true;
+    });
+  }
+
+  function viewBoletos(){
+    if(boletosMode==='importar') return viewBoletosImportar();
+    var todos = STATE.boletosPainel;
+    var contadores = {
+      incompleto: todos.filter(function(i){return i.cadastroIncompleto;}).length,
+      atrasado: todos.filter(function(i){return !i.cadastroIncompleto && i.diasRestantes!=null && i.diasRestantes<0 && i.boletoStatus!=='enviado';}).length,
+      atencao: todos.filter(function(i){return !i.cadastroIncompleto && i.diasRestantes!=null && i.diasRestantes>=0 && i.diasRestantes<=7 && i.boletoStatus!=='enviado';}).length,
+      enviado: todos.filter(function(i){return i.boletoStatus==='enviado';}).length
+    };
+    var operadoras = Array.from(new Set(todos.map(function(i){return i.operadora;}).filter(Boolean))).sort();
+    var chipsFiltro = [
+      {k:'todos', l:'Todos ('+todos.length+')'},
+      {k:'atrasado', l:'Atrasados ('+contadores.atrasado+')'},
+      {k:'atencao', l:'Vencendo em 7d ('+contadores.atencao+')'},
+      {k:'incompleto', l:'Cadastro incompleto ('+contadores.incompleto+')'},
+      {k:'enviado', l:'Enviados este mês ('+contadores.enviado+')'}
+    ].map(function(c){
+      return '<button class="chip '+(boletosFiltroStatus===c.k?'chip-gold':'chip-neutral')+'" style="border:none;cursor:pointer" data-boletos-filtro="'+c.k+'">'+c.l+'</button>';
+    }).join(' ');
+    var itens = boletosFiltrados().sort(function(a,b){
+      var da = a.diasRestantes==null ? 9999 : a.diasRestantes, db = b.diasRestantes==null ? 9999 : b.diasRestantes;
+      return da-db;
+    });
+    var listHtml = itens.length ? itens.map(function(item){
+      var st = boletoStatusInfo(item);
+      var podeEnviarAgora = !item.cadastroIncompleto && (item.boletoStatus==='baixado' || item.boletoStatus==='erro');
+      var podeVerPdf = !!item.storagePath;
+      var inputId = 'boletoUpload_'+item.contratoId;
+      return '<div class="row-card" style="cursor:default; margin-bottom:.6rem"><div class="row-top">'+
+        '<div><div class="row-title">'+item.empresa+'</div><div class="row-sub">'+item.operadora+(item.ramo?' · '+item.ramo:'')+(item.diaVencimento?' · vence dia '+item.diaVencimento:'')+'</div></div>'+
+        '<span class="chip '+st.cls+'">'+ic(st.ic)+' '+st.label+'</span></div>'+
+        '<div class="btn-row" style="margin-top:.5rem; flex-wrap:wrap">'+
+          '<label class="btn btn-ghost" style="width:auto; cursor:pointer" for="'+inputId+'">'+ic('upload')+' '+(item.storagePath?'Trocar PDF':'Anexar PDF')+'</label>'+
+          '<input type="file" id="'+inputId+'" data-boleto-upload-input data-contrato-id="'+item.contratoId+'" data-competencia="'+item.competenciaAtual+'" accept="application/pdf" hidden />'+
+          (podeVerPdf ? '<button type="button" class="btn btn-ghost" style="width:auto" data-boleto-ver-pdf="'+item.storagePath+'">'+ic('doc')+' Ver PDF</button>' : '')+
+          (podeEnviarAgora ? '<button type="button" class="btn btn-primary" style="width:auto" data-boleto-enviar-agora="'+item.boletoId+'">'+ic('check')+' Enviar agora</button>' : '')+
+        '</div>'+
+        (item.cadastroIncompleto ? '<p class="row-sub" style="color:var(--warning); margin-top:.4rem">Falta '+[!item.diaVencimento&&'dia de vencimento', !item.emailCobranca&&'e-mail', !item.cnpj&&'CNPJ'].filter(Boolean).join(', ')+' — complete o cadastro pra ativar o envio automático.</p>' : '')+
+      '</div>';
+    }).join('') : '<div class="empty-col">Nada por aqui com esse filtro.</div>';
+    return '<div class="content-pad">'+
+      '<div style="display:flex; justify-content:space-between; align-items:center; gap:.6rem; margin-bottom:.7rem; flex-wrap:wrap">'+
+        '<div class="section-label" style="margin-bottom:0">Boletos</div>'+
+        '<button class="btn btn-primary" style="width:auto" data-boletos-mode="importar">'+ic('upload')+' Importar planilha</button>'+
+      '</div>'+
+      '<p class="row-sub" style="margin-bottom:.7rem">O envio automático dispara 7 dias antes do vencimento, pro e-mail do cliente com cópia pro financeiro — mas só depois que o PDF do boleto do mês estiver anexado aqui.</p>'+
+      '<div style="display:flex;gap:.4rem;margin-bottom:.6rem;flex-wrap:wrap">'+chipsFiltro+'</div>'+
+      '<div style="display:flex;gap:.5rem;margin-bottom:.8rem;flex-wrap:wrap">'+
+        '<input type="text" id="boletosBuscaInput" placeholder="Buscar empresa..." value="'+(boletosBusca||'').replace(/"/g,'&quot;')+'" style="flex:1;min-width:160px;padding:.5rem .7rem;border:1px solid var(--border);border-radius:.5rem;background:var(--surface)" />'+
+        '<select id="boletosOperadoraSelect" style="padding:.5rem .7rem;border:1px solid var(--border);border-radius:.5rem;background:var(--surface)">'+
+          '<option value="todas"'+(boletosFiltroOperadora==='todas'?' selected':'')+'>Todas as operadoras</option>'+
+          operadoras.map(function(o){ return '<option value="'+o+'"'+(boletosFiltroOperadora===o?' selected':'')+'>'+o+'</option>'; }).join('')+
+        '</select>'+
+      '</div>'+
+      listHtml+
+    '</div>';
+  }
+
+  var BOLETOS_PLANILHA_COLUNAS = ['EMPRESA','OPERADORA','SEG','LOGIN','SENHA','VENC.','EMAILS','CONTATO','TELEFONE','CNPJ','BOLETO'];
+
+  function viewBoletosImportar(){
+    if(boletosImportPreview) return viewBoletosPreviewImportacao();
+    return '<div class="content-pad">'+
+      '<div class="section-label">Importar planilha de boletos</div>'+
+      '<p class="row-sub" style="margin-bottom:.7rem">Use o mesmo padrão de colunas da planilha original: EMPRESA, OPERADORA, SEG, LOGIN, SENHA, VENC., EMAILS, CONTATO, TELEFONE, CNPJ, Boleto (procedimento de retirada). Pode ter só clientes novos, ou a planilha inteira — quem já existe é ignorado, ninguém duplica.</p>'+
+      '<form id="boletosImportForm">'+
+        '<div class="field"><label>Arquivo (.xlsx ou .csv)</label>'+
+          '<label class="attach-mock" for="boletosImportInput">'+ic('upload')+'<span id="boletosImportLabel">Toque para anexar a planilha</span></label>'+
+          '<input type="file" id="boletosImportInput" accept=".xlsx,.xls,.csv" hidden required />'+
+        '</div>'+
+        '<button type="submit" class="btn btn-primary">'+ic('chev')+' Analisar planilha</button>'+
+      '</form>'+
+      '<button type="button" class="btn btn-ghost" style="margin-top:.5rem" data-boletos-mode="lista">Cancelar</button>'+
+    '</div>';
+  }
+
+  function viewBoletosPreviewImportacao(){
+    var p = boletosImportPreview;
+    var linhasHtml = p.linhas.map(function(l){
+      var badge = l.jaExiste ? '<span class="chip chip-neutral">Já existe — ignorado</span>' :
+                  (!l.valido ? '<span class="chip chip-crit">'+l.motivoInvalido+'</span>' : '<span class="chip chip-ok">Novo — será importado</span>');
+      return '<div class="row-card" style="cursor:default; margin-bottom:.5rem; padding:.6rem .7rem"><div class="row-top">'+
+        '<div><div class="row-title" style="font-size:.85rem">'+(l.empresa||'—')+'</div>'+
+        '<div class="row-sub" style="font-size:.72rem">'+(l.operadora||'—')+(l.venc?' · vence dia '+l.venc:' · sem dia de vencimento')+'</div></div>'+badge+'</div></div>';
+    }).join('');
+    return '<div class="content-pad">'+
+      '<div class="section-label">Prévia — '+p.nomeArquivo+'</div>'+
+      '<div class="stat-grid">'+
+        '<div class="stat-tile"><div class="n">'+p.novos+'</div><div class="l">Serão importados</div></div>'+
+        '<div class="stat-tile"><div class="n">'+p.existentes+'</div><div class="l">Já existiam (ignorados)</div></div>'+
+        '<div class="stat-tile"><div class="n" style="color:'+(p.invalidos?'var(--critical)':'inherit')+'">'+p.invalidos+'</div><div class="l">Sem empresa/operadora — não importados</div></div>'+
+      '</div>'+
+      '<div class="section-label" style="margin-top:1rem">Linhas lidas ('+p.linhas.length+')</div>'+
+      linhasHtml+
+      '<div class="btn-row" style="margin-top:1rem">'+
+        (p.novos ? '<button class="btn btn-primary" data-boletos-import-action="confirmar">'+ic('check')+' Confirmar importação ('+p.novos+')</button>' : '')+
+        '<button class="btn btn-ghost" data-boletos-import-action="cancelar">Cancelar</button>'+
+      '</div>'+
+    '</div>';
+  }
+
+  function normalizarRamoPlanilha(seg){
+    if(!seg) return null;
+    var s = String(seg).trim().toUpperCase();
+    if(s==='SAÚDE' || s==='SAUDE') return 'saude';
+    if(s==='ODONTO' || s==='DENTAL') return 'odonto';
+    if(s==='VIDA') return 'vida';
+    return null;
+  }
+  function normalizarVencPlanilha(v){
+    var n = parseInt(v, 10);
+    return (!isNaN(n) && n>=1 && n<=31) ? n : null;
+  }
+  function limparLoginPlanilha(v){
+    var s = (v==null ? '' : String(v)).trim();
+    return (!s || s==='.') ? null : s;
+  }
+  function limparTextoPlanilha(v){
+    var s = (v==null ? '' : String(v)).trim();
+    return s || null;
+  }
+
+  function parseBoletosPlanilha(file){
+    return file.arrayBuffer().then(function(buf){
+      var wb = XLSX.read(buf, {type:'array'});
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
+      if(!rows.length) return [];
+      var header = rows[0].map(function(h){ return (h==null?'':String(h)).trim().toUpperCase(); });
+      var idx = {};
+      BOLETOS_PLANILHA_COLUNAS.forEach(function(col){ idx[col] = header.indexOf(col); });
+      // aceita "VENC" sem ponto também
+      if(idx['VENC.']===-1) idx['VENC.'] = header.indexOf('VENC');
+      var out = [];
+      for(var i=1;i<rows.length;i++){
+        var r = rows[i];
+        if(!r || !r.length) continue;
+        var empresa = limparTextoPlanilha(idx['EMPRESA']>=0 ? r[idx['EMPRESA']] : null);
+        if(!empresa) continue;
+        out.push({
+          empresa: empresa,
+          operadora: limparTextoPlanilha(idx['OPERADORA']>=0 ? r[idx['OPERADORA']] : null),
+          ramo: normalizarRamoPlanilha(idx['SEG']>=0 ? r[idx['SEG']] : null),
+          login: limparLoginPlanilha(idx['LOGIN']>=0 ? r[idx['LOGIN']] : null),
+          senha: limparTextoPlanilha(idx['SENHA']>=0 ? r[idx['SENHA']] : null),
+          venc: normalizarVencPlanilha(idx['VENC.']>=0 ? r[idx['VENC.']] : null),
+          emails: limparTextoPlanilha(idx['EMAILS']>=0 ? r[idx['EMAILS']] : null),
+          contato: limparTextoPlanilha(idx['CONTATO']>=0 ? r[idx['CONTATO']] : null),
+          telefone: limparTextoPlanilha(idx['TELEFONE']>=0 ? r[idx['TELEFONE']] : null),
+          cnpj: limparTextoPlanilha(idx['CNPJ']>=0 ? r[idx['CNPJ']] : null),
+          procedimento: limparTextoPlanilha(idx['BOLETO']>=0 ? r[idx['BOLETO']] : null)
+        });
+      }
+      return out;
+    });
+  }
+
+  function montarPreviewBoletosImportacao(nomeArquivo, linhasBrutas){
+    var existentesPorCnpj = {}, existentesPorNome = {};
+    STATE.empresasAll.forEach(function(e){
+      if(e.cnpj) existentesPorCnpj[String(e.cnpj).trim()] = true;
+      existentesPorNome[String(e.nome).toLowerCase().trim()] = true;
+    });
+    var existentesContrato = {};
+    STATE.boletosPainel.forEach(function(i){
+      existentesContrato[[(i.cnpj||i.empresa).toLowerCase().trim(), i.operadora, i.ramo, i.diaVencimento].join('|')] = true;
+    });
+    var novos=0, existentes=0, invalidos=0;
+    var linhas = linhasBrutas.map(function(l){
+      if(!l.operadora){ invalidos++; return Object.assign({}, l, {valido:false, jaExiste:false, motivoInvalido:'Sem operadora'}); }
+      var key = [(l.cnpj||l.empresa).toLowerCase().trim(), l.operadora, l.ramo, l.venc].join('|');
+      var empresaJaExiste = l.cnpj ? !!existentesPorCnpj[l.cnpj] : !!existentesPorNome[l.empresa.toLowerCase().trim()];
+      var contratoJaExiste = !!existentesContrato[key];
+      if(empresaJaExiste && contratoJaExiste){ existentes++; return Object.assign({}, l, {valido:true, jaExiste:true}); }
+      novos++;
+      return Object.assign({}, l, {valido:true, jaExiste:false});
+    });
+    return { nomeArquivo:nomeArquivo, linhas:linhas, novos:novos, existentes:existentes, invalidos:invalidos };
+  }
+
+  function handleBoletosImportSubmit(e){
+    e.preventDefault();
+    var fileInput = document.getElementById('boletosImportInput');
+    var file = fileInput && fileInput.files && fileInput.files[0];
+    if(!file) return;
+    var btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true;
+    parseBoletosPlanilha(file).then(function(linhas){
+      if(!linhas.length){ btn.disabled=false; showToast('Não encontrei linhas válidas — confira o cabeçalho da planilha.'); return; }
+      boletosImportPreview = montarPreviewBoletosImportacao(file.name, linhas);
+      renderContent();
+    }).catch(function(err){ btn.disabled=false; showToast('Não consegui ler esse arquivo — confira se é .xlsx ou .csv.'); });
+  }
+
+  function confirmarImportacaoBoletos(){
+    var novas = boletosImportPreview.linhas.filter(function(l){ return l.valido && !l.jaExiste; });
+    if(!novas.length){ boletosImportPreview = null; renderContent(); return; }
+    var okCount = 0, errCount = 0;
+    function processarProxima(i){
+      if(i>=novas.length){
+        showToast(okCount+' importado(s)'+(errCount?', '+errCount+' com erro':''));
+        boletosImportPreview = null;
+        refreshData().then(renderContent);
+        return;
+      }
+      var l = novas[i];
+      buscarOuCriarEmpresa(l).then(function(empresaId){
+        return sb.from('contratos').insert({
+          empresa_id: empresaId, operadora: l.operadora, ramo: l.ramo, dia_vencimento_boleto: l.venc,
+          portal_login: l.login, portal_senha: l.senha, portal_procedimento: l.procedimento,
+          email_cobranca: l.emails, contato_nome: l.contato, telefone_contato: l.telefone,
+          tipo_negocio: 'boleto', valor_mensal: 0, dia_aniversario: l.venc||1, mes_aniversario: (new Date()).getMonth()+1
+        });
+      }).then(function(){ okCount++; }).catch(function(){ errCount++; }).then(function(){ processarProxima(i+1); });
+    }
+    processarProxima(0);
+  }
+
+  function buscarOuCriarEmpresa(l){
+    var existente = STATE.empresasAll.find(function(e){
+      return l.cnpj ? (e.cnpj && String(e.cnpj).trim()===l.cnpj) : (String(e.nome).toLowerCase().trim()===l.empresa.toLowerCase().trim());
+    });
+    if(existente) return Promise.resolve(existente.id);
+    return sb.from('empresas').insert({ nome:l.empresa, cnpj:l.cnpj }).select('id').single().then(function(res){
+      if(res.error) throw res.error;
+      STATE.empresasAll.push({id:res.data.id, nome:l.empresa, cnpj:l.cnpj});
+      return res.data.id;
+    });
   }
 
   /* ============== VIEW: RH / Cliente ============== */
