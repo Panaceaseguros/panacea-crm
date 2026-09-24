@@ -1,0 +1,17 @@
+{
+  "name": "panacea-boleto-robo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Robô que loga nas operadoras e baixa os boletos automaticamente, alimentando o CRM Panacea.",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node runner.js",
+    "amil": "node runner.js amil",
+    "porto_seguro": "node runner.js porto_seguro",
+    "sulamerica": "node runner.js sulamerica"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "playwright": "^1.47.0"
+  }
+}
