@@ -1,0 +1,113 @@
+name: Robo de Boletos
+
+# ------------------------------------------------------------------------
+# Roda o robo que loga nos portais das operadoras e baixa os boletos dos
+# clientes automaticamente, alimentando a aba "Boletos" do CRM.
+#
+# ATENCAO — leia boleto-robo/README.md antes de ativar o agendamento
+# automatico (o gatilho "schedule" abaixo comeca DESLIGADO de proposito).
+# Cada operadora precisa ser testada e validada manualmente primeiro (pelo
+# botao "Run workflow" desta pagina), porque os scripts foram escritos a
+# partir do passo a passo da planilha, sem termos aberto o site real da
+# operadora ainda. So depois de validar uma operadora, ela deve ser
+# adicionada na lista "matrix.operadora" abaixo E o gatilho "schedule" deve
+# ser reativado (removendo o "#" da frente da linha "cron").
+# ------------------------------------------------------------------------
+
+on:
+  # Descomente as duas linhas abaixo (tire o "#" do começo) só depois que
+  # TODAS as operadoras da lista de baixo já tiverem sido testadas e
+  # confirmadas funcionando via "Run workflow".
+  # schedule:
+  #   - cron: '0 10 * * *' # todo dia às 10h UTC (~07h em Brasília)
+  workflow_dispatch:
+    inputs:
+      operadora:
+        description: 'Operadora pra testar agora (deixe em branco pra rodar todas da lista)'
+        required: false
+        default: ''
+
+jobs:
+  baixar-boletos:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Só entram aqui operadoras já testadas e validadas. Pra testar uma
+        # nova antes de confiar nela, use "Run workflow" e preencha o campo
+        # "operadora" com o nome dela mesmo que ainda não esteja na lista —
+        # o passo abaixo roda de qualquer forma quando chamado manualmente.
+        operadora: [amil, porto_seguro, sulamerica]
+    defaults:
+      run:
+        working-directory: boleto-robo
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Instalar navegador (Chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Rodar robô desta operadora
+        if: github.event_name == 'schedule' || github.event.inputs.operadora == '' || github.event.inputs.operadora == matrix.operadora
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AMIL_LOGIN: ${{ secrets.AMIL_LOGIN }}
+          AMIL_SENHA: ${{ secrets.AMIL_SENHA }}
+          PORTO_SEGURO_LOGIN: ${{ secrets.PORTO_SEGURO_LOGIN }}
+          PORTO_SEGURO_SENHA: ${{ secrets.PORTO_SEGURO_SENHA }}
+          SULAMERICA_LOGIN: ${{ secrets.SULAMERICA_LOGIN }}
+          SULAMERICA_SENHA: ${{ secrets.SULAMERICA_SENHA }}
+        run: node runner.js ${{ matrix.operadora }}
+
+      - name: Guardar prints de erro (se algum passo falhou)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: erro-${{ matrix.operadora }}
+          path: boleto-robo/erro_*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Job separado, só roda quando alguém aciona manualmente e digita o nome
+  # de uma operadora que ainda NÃO está na lista "matrix" acima — é o jeito
+  # de testar uma operadora nova sem mexer neste arquivo toda hora.
+  testar-operadora-nova:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.operadora != '' && !contains(fromJSON('["amil","porto_seguro","sulamerica"]'), github.event.inputs.operadora)
+    defaults:
+      run:
+        working-directory: boleto-robo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Rodar robô da operadora nova
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AMIL_LOGIN: ${{ secrets.AMIL_LOGIN }}
+          AMIL_SENHA: ${{ secrets.AMIL_SENHA }}
+          PORTO_SEGURO_LOGIN: ${{ secrets.PORTO_SEGURO_LOGIN }}
+          PORTO_SEGURO_SENHA: ${{ secrets.PORTO_SEGURO_SENHA }}
+          SULAMERICA_LOGIN: ${{ secrets.SULAMERICA_LOGIN }}
+          SULAMERICA_SENHA: ${{ secrets.SULAMERICA_SENHA }}
+        run: node runner.js ${{ github.event.inputs.operadora }}
+      - name: Guardar prints de erro (se algum passo falhou)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: erro-${{ github.event.inputs.operadora }}
+          path: boleto-robo/erro_*.png
+          if-no-files-found: ignore
+          retention-days: 14
