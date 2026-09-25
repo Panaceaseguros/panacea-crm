@@ -6,6 +6,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root{
     --bg:#F7F5EC; --surface:#FFFFFF; --surface-2:#F0EDE1; --border:#E3DFCF;
@@ -682,7 +683,7 @@
   /* ============== ESTADO ============== */
   var session = null;
   var perfil = null; // {id, papel, nome, email, empresaId, empresaNome}
-  var STATE = { leads:[], tasks:[], posvendas:[], inclusaoPropostas:[], financeiro:[], recibosMensais:[], recibosLancamentos:[], equipeInterna:[], contratos:[], segurados:[], comissoes:[], empresasAll:[], comissaoAcompanhamentos:[], leadAtendimentos:[], boletosPainel:[] };
+  var STATE = { leads:[], tasks:[], posvendas:[], inclusaoPropostas:[], financeiro:[], recibosMensais:[], recibosLancamentos:[], equipeInterna:[], contratos:[], segurados:[], comissoes:[], empresasAll:[], comissaoAcompanhamentos:[], leadAtendimentos:[], boletosPainel:[], boletosInbox:[] };
   var posvendasFiltro = 'meus';
   var conciliacaoMode = 'lista'; // 'lista' | 'importar'
   var conciliacaoFiltroStatus = 'abertos';
@@ -698,11 +699,14 @@
   var painelFinTab = 'comissoes';
   var painelFinMode = 'lista'; // 'lista' | 'novo-contrato' | 'novo-segurado' | 'nova-comissao'
   var painelFinContratoId = null; // contrato em foco (pra "nova comissão"/"novo segurado" pré-preenchido)
-  var boletosMode = 'lista'; // 'lista' | 'importar'
+  var boletosMode = 'lista'; // 'lista' | 'importar' | 'revisao' | 'descartados'
   var boletosFiltroStatus = 'todos'; // 'todos' | 'atencao' | 'incompleto' | 'pronto' | 'enviado'
   var boletosFiltroOperadora = 'todas';
   var boletosBusca = '';
   var boletosImportPreview = null; // resultado da leitura da planilha, antes de confirmar
+  var boletosCentralProcessando = false; // true enquanto a Central de Boletos está lendo/casando os PDFs do lote
+  var boletosCentralProgresso = null; // {feito, total} durante o processamento em lote
+  var boletosRevisaoEscolha = {}; // { [inboxId]: contratoId escolhido no <select> antes de clicar "Atribuir" }
   var reajusteAvisoDias = 30;
   var lastTabByRole = {};
 
@@ -1231,6 +1235,71 @@
         });
       });
     });
+    var boletosCentralInput = document.getElementById('boletosCentralInput');
+    if(boletosCentralInput) boletosCentralInput.addEventListener('change', function(){
+      var files = boletosCentralInput.files;
+      boletosCentralInput.value = '';
+      if(files && files.length) processarLoteInbox(files);
+    });
+    document.querySelectorAll('[data-boleto-inbox-select]').forEach(function(el){
+      el.addEventListener('change', function(){ boletosRevisaoEscolha[el.dataset.boletoInboxSelect] = el.value; });
+    });
+    document.querySelectorAll('[data-boleto-inbox-atribuir]').forEach(function(el){
+      el.addEventListener('click', function(){
+        var inboxId = el.dataset.boletoInboxAtribuir;
+        var contratoId = boletosRevisaoEscolha[inboxId];
+        if(!contratoId){
+          var sel = document.querySelector('[data-boleto-inbox-select="'+inboxId+'"]');
+          contratoId = sel ? sel.value : '';
+        }
+        if(!contratoId){ showToast('Escolha o cliente antes de atribuir'); return; }
+        var item = STATE.boletosPainel.find(function(c){ return c.contratoId===contratoId; });
+        var row = STATE.boletosInbox.find(function(r){ return r.id===inboxId; });
+        if(!item || !row) return;
+        el.disabled = true;
+        sb.from('boletos').upsert({
+          contrato_id: item.contratoId, competencia: item.competenciaAtual, status:'baixado',
+          storage_path: row.storagePath, origem:'manual', criado_por: perfil.id, updated_at: new Date().toISOString()
+        }, { onConflict:'contrato_id,competencia' }).select('id').single().then(function(bRes){
+          if(bRes.error) throw bRes.error;
+          return sb.from('boletos_inbox').update({
+            status:'atribuido_manual', contrato_id: item.contratoId, competencia: item.competenciaAtual,
+            boleto_id: bRes.data.id, motivo: null, decidido_por: perfil.id, updated_at: new Date().toISOString()
+          }).eq('id', inboxId);
+        }).then(function(res){
+          if(res && res.error) throw res.error;
+          showToast('Boleto atribuído a '+item.empresa+' — segue o fluxo normal de envio');
+          delete boletosRevisaoEscolha[inboxId];
+          refreshData().then(renderContent);
+        }).catch(function(){
+          el.disabled = false;
+          showToast('Não deu pra atribuir — tente de novo');
+        });
+      });
+    });
+    document.querySelectorAll('[data-boleto-inbox-descartar]').forEach(function(el){
+      el.addEventListener('click', function(){
+        var inboxId = el.dataset.boletoInboxDescartar;
+        var selMotivo = document.querySelector('[data-boleto-inbox-motivo="'+inboxId+'"]');
+        var motivo = selMotivo ? selMotivo.value : 'Descartado manualmente';
+        el.disabled = true;
+        sb.from('boletos_inbox').update({ status:'descartado', motivo:motivo, decidido_por: perfil.id, updated_at: new Date().toISOString() }).eq('id', inboxId).then(function(res){
+          if(res.error){ el.disabled=false; showToast('Não deu pra descartar — tente de novo'); return; }
+          showToast('Boleto descartado');
+          refreshData().then(renderContent);
+        });
+      });
+    });
+    document.querySelectorAll('[data-boleto-inbox-restaurar]').forEach(function(el){
+      el.addEventListener('click', function(){
+        el.disabled = true;
+        sb.from('boletos_inbox').update({ status:'pendente_revisao', motivo: null, decidido_por: perfil.id, updated_at: new Date().toISOString() }).eq('id', el.dataset.boletoInboxRestaurar).then(function(res){
+          if(res.error){ el.disabled=false; showToast('Não deu pra restaurar — tente de novo'); return; }
+          showToast('Restaurado pra revisão manual');
+          refreshData().then(renderContent);
+        });
+      });
+    });
     var boletosImportForm = document.getElementById('boletosImportForm');
     if(boletosImportForm) boletosImportForm.addEventListener('submit', handleBoletosImportSubmit);
     var boletosImportInput = document.getElementById('boletosImportInput');
@@ -1429,10 +1498,10 @@
   function refreshData(){
     var p = perfil.papel;
     if(p==='vendedor') return Promise.all([fetchLeads(), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchComissoes(), fetchLeadAtendimentos()]);
-    if(p==='administrativo') return Promise.all([fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes(), fetchComissaoAcompanhamentos(), fetchLeadAtendimentos(), fetchBoletosPainel(), fetchEmpresasAll()]);
-    if(p==='posvendas') return Promise.all([fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchEquipeInterna(), fetchBoletosPainel(), fetchEmpresasAll()]);
+    if(p==='administrativo') return Promise.all([fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes(), fetchComissaoAcompanhamentos(), fetchLeadAtendimentos(), fetchBoletosPainel(), fetchBoletosInbox(), fetchEmpresasAll()]);
+    if(p==='posvendas') return Promise.all([fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchEquipeInterna(), fetchBoletosPainel(), fetchBoletosInbox(), fetchEmpresasAll()]);
     if(p==='rh' || p==='cliente') return fetchPosvendas(false);
-    if(p==='gestao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes(), fetchEquipeInterna(), fetchComissaoAcompanhamentos(), fetchLeadAtendimentos(), fetchBoletosPainel(), fetchEmpresasAll()]);
+    if(p==='gestao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchFinanceiro(), fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchContratos(), fetchSegurados(), fetchComissoes(), fetchEquipeInterna(), fetchComissaoAcompanhamentos(), fetchLeadAtendimentos(), fetchBoletosPainel(), fetchBoletosInbox(), fetchEmpresasAll()]);
     if(p==='implantacao') return Promise.all([fetchLeads(), fetchTasks(), fetchInclusao(), fetchPosvendas(true), fetchRecibosMensais(), fetchRecibosLancamentos(), fetchEquipeInterna()]);
     return Promise.resolve();
   }
@@ -1481,6 +1550,23 @@
           contatoNome:r.contato_nome, telefone:r.telefone_contato, procedimento:r.portal_procedimento,
           competenciaAtual:r.competencia_atual, boletoId:r.boleto_id, boletoStatus:r.boleto_status,
           storagePath:r.storage_path, enviadoEm:r.enviado_em, cadastroIncompleto:r.cadastro_incompleto
+        };
+      });
+    });
+  }
+
+  function fetchBoletosInbox(){
+    return sb.from('boletos_inbox').select('*').order('created_at', {ascending:false}).then(function(res){
+      if(res.error){ STATE.boletosInbox = []; return; }
+      STATE.boletosInbox = (res.data||[]).map(function(r){
+        return {
+          id:r.id, nomeArquivo:r.nome_arquivo, storagePath:r.storage_path,
+          cnpjDetectado:r.cnpj_detectado, empresaDetectada:r.empresa_detectada,
+          operadoraDetectada:r.operadora_detectada, vencimentoDetectado:r.vencimento_detectado,
+          linhaDigitavel:r.linha_digitavel, linhaDigitavelValida:r.linha_digitavel_valida,
+          contratoId:r.contrato_id, competencia:r.competencia, boletoId:r.boleto_id,
+          status:r.status, motivo:r.motivo, scoreCasamento:r.score_casamento,
+          createdAt:r.created_at
         };
       });
     });
@@ -1851,6 +1937,284 @@
       }).join('')+'</div></div>';
   }
 
+  /* ============== CENTRAL DE BOLETOS: leitura de PDF + casamento automático ============== */
+  // Em vez de um robô entrar sozinho nos portais das operadoras (abandonado
+  // — proteções anti-robô reais demais pra contornar com segurança, ver
+  // boleto-robo/README.md), o pós-vendas continua baixando o PDF na mão,
+  // mas pode jogar vários de uma vez aqui. O app lê cada PDF (CNPJ,
+  // operadora, vencimento, linha digitável) e decide sozinho de qual
+  // cliente é — só cai pra revisão manual quando não tem certeza.
+
+  var PDFJS_WORKER_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  var _pdfWorkerConfigurado = false;
+  function garantirPdfWorker(){
+    if(_pdfWorkerConfigurado || typeof pdfjsLib==='undefined') return;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
+    _pdfWorkerConfigurado = true;
+  }
+
+  function extrairTextoPdf(file){
+    garantirPdfWorker();
+    return file.arrayBuffer().then(function(buf){
+      return pdfjsLib.getDocument({ data: buf }).promise;
+    }).then(function(pdf){
+      var paginas = [];
+      for(var i=1;i<=pdf.numPages;i++) paginas.push(i);
+      return paginas.reduce(function(prom, num){
+        return prom.then(function(acc){
+          return pdf.getPage(num).then(function(pagina){ return pagina.getTextContent(); })
+            .then(function(conteudo){
+              var texto = conteudo.items.map(function(it){ return it.str; }).join(' ');
+              return acc + '\n' + texto;
+            });
+        });
+      }, Promise.resolve(''));
+    });
+  }
+
+  function normalizarTexto(s){
+    return (s||'').toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+  }
+
+  function parseDataSql(str){
+    if(!str) return null;
+    var partes = String(str).slice(0,10).split('-');
+    if(partes.length!==3) return null;
+    return new Date(parseInt(partes[0],10), parseInt(partes[1],10)-1, parseInt(partes[2],10));
+  }
+
+  // Validação de CNPJ (dígito verificador padrão) — só pra filtrar sequência
+  // de 14 números que apareceu por acaso no PDF (valor, telefone) e não é
+  // um CNPJ de verdade.
+  function validarCnpj(cnpj){
+    var d = (cnpj||'').replace(/\D/g,'');
+    if(d.length!==14 || /^(\d)\1{13}$/.test(d)) return false;
+    function calc(digs, pesos){
+      var soma=0;
+      for(var i=0;i<pesos.length;i++) soma += parseInt(digs[i],10)*pesos[i];
+      var resto = soma % 11;
+      return resto<2 ? 0 : 11-resto;
+    }
+    var p1=[5,4,3,2,9,8,7,6,5,4,3,2], p2=[6,5,4,3,2,9,8,7,6,5,4,3,2];
+    if(calc(d.slice(0,12), p1) !== parseInt(d[12],10)) return false;
+    return calc(d.slice(0,13), p2) === parseInt(d[13],10);
+  }
+
+  function extrairCnpjs(texto){
+    var re = /\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/g, m, out = [];
+    while((m = re.exec(texto))){
+      var digs = m[0].replace(/\D/g,'');
+      if(digs.length===14 && validarCnpj(digs) && out.indexOf(digs)===-1) out.push(digs);
+    }
+    return out;
+  }
+
+  function extrairDatas(texto){
+    var re = /(\d{2})\/(\d{2})\/(\d{4})/g, out = [], m;
+    while((m = re.exec(texto))){
+      var d = parseInt(m[1],10), mo = parseInt(m[2],10), y = parseInt(m[3],10);
+      if(d>=1 && d<=31 && mo>=1 && mo<=12 && y>=2020 && y<=2100) out.push({ data:new Date(y,mo-1,d), index:m.index });
+    }
+    return out;
+  }
+
+  function extrairVencimento(texto){
+    var datas = extrairDatas(texto);
+    if(!datas.length) return null;
+    var idxVenc = texto.toUpperCase().indexOf('VENCIMENTO');
+    if(idxVenc!==-1){
+      var maisPerto = null, menorDist = Infinity;
+      datas.forEach(function(d){
+        var dist = Math.abs(d.index - idxVenc);
+        if(dist<menorDist){ menorDist = dist; maisPerto = d; }
+      });
+      if(maisPerto && menorDist<200) return maisPerto.data;
+    }
+    return datas[0].data;
+  }
+
+  // Linha digitável (código de barras "digitado" do boleto bancário) tem
+  // sempre 47 dígitos, em 3 blocos com dígito verificador próprio (módulo
+  // 10 cada) — a mesma conta que qualquer banco/app de pagamento faz antes
+  // de aceitar um boleto. Se achamos uma linha de 47 dígitos no texto do
+  // PDF e a conta não fecha, é sinal forte de arquivo corrompido/adulterado.
+  function extrairLinhaDigitavel(texto){
+    var candidatos = texto.match(/[\d][\d.\-\s]{35,80}[\d]/g) || [];
+    for(var i=0;i<candidatos.length;i++){
+      var soDigitos = candidatos[i].replace(/\D/g,'');
+      if(soDigitos.length===47 || soDigitos.length===48) return soDigitos;
+    }
+    return null;
+  }
+  function mod10Boleto(digitos){
+    var soma = 0, peso = 2;
+    for(var i=digitos.length-1;i>=0;i--){
+      var mult = parseInt(digitos[i],10)*peso;
+      if(mult>9) mult = Math.floor(mult/10) + (mult%10);
+      soma += mult;
+      peso = peso===2 ? 1 : 2;
+    }
+    var resto = soma % 10;
+    return resto===0 ? 0 : 10-resto;
+  }
+  function validarLinhaDigitavelMod10(linha){
+    if(!linha || linha.length!==47) return null; // formato de concessionária (48) não é o caso aqui — não avalia
+    var c1=linha.slice(0,9), dv1=linha[9];
+    var c2=linha.slice(10,20), dv2=linha[20];
+    var c3=linha.slice(21,31), dv3=linha[31];
+    return String(mod10Boleto(c1))===dv1 && String(mod10Boleto(c2))===dv2 && String(mod10Boleto(c3))===dv3;
+  }
+
+  function detectarOperadoraNoTexto(texto){
+    var textoNorm = normalizarTexto(texto);
+    var operadoras = Array.from(new Set(STATE.boletosPainel.map(function(i){return i.operadora;}).filter(Boolean)));
+    for(var i=0;i<operadoras.length;i++){
+      var opNorm = normalizarTexto(operadoras[i]);
+      if(opNorm && textoNorm.indexOf(opNorm)!==-1) return operadoras[i];
+    }
+    return null;
+  }
+
+  function extrairCamposBoleto(texto){
+    texto = texto || '';
+    var linha = extrairLinhaDigitavel(texto);
+    return {
+      texto: texto,
+      cnpjs: extrairCnpjs(texto),
+      vencimento: extrairVencimento(texto),
+      linhaDigitavel: linha,
+      linhaDigitavelValida: linha ? validarLinhaDigitavelMod10(linha) : null,
+      operadoraDetectada: detectarOperadoraNoTexto(texto)
+    };
+  }
+
+  // Pontua cada contrato que ainda está "na alerta" (esperando boleto deste
+  // mês) contra o que foi lido do PDF. CNPJ batendo sozinho já garante
+  // confiança alta; nome da empresa/operadora no texto são reforço.
+  function candidatosParaBoleto(campos){
+    var pendentes = STATE.boletosPainel.filter(function(i){ return !i.cadastroIncompleto; });
+    var textoNorm = normalizarTexto(campos.texto);
+    var textoNormSemEspaco = textoNorm.replace(/ /g,'');
+    return pendentes.map(function(item){
+      var score = 0;
+      if(campos.cnpjs.length && item.cnpj){
+        var cnpjItem = String(item.cnpj).replace(/\D/g,'');
+        if(cnpjItem && campos.cnpjs.indexOf(cnpjItem)!==-1) score += 100;
+      }
+      if(item.operadora){
+        var opNorm = normalizarTexto(item.operadora);
+        if(opNorm && (textoNorm.indexOf(opNorm)!==-1 || textoNormSemEspaco.indexOf(opNorm.replace(/ /g,''))!==-1)) score += 30;
+      }
+      if(item.empresa){
+        var empNorm = normalizarTexto(item.empresa);
+        if(empNorm && textoNorm.indexOf(empNorm)!==-1){ score += 40; }
+        else {
+          var tokens = empNorm.split(' ').filter(function(t){return t.length>=4;});
+          var achados = tokens.filter(function(t){ return textoNorm.indexOf(t)!==-1; });
+          if(tokens.length && achados.length) score += Math.round(20*achados.length/tokens.length);
+        }
+      }
+      return { item:item, score:score };
+    }).filter(function(c){return c.score>0;}).sort(function(a,b){return b.score-a.score;});
+  }
+
+  // Decide o destino de 1 PDF: auto_atribuido (segue o fluxo normal),
+  // pendente_revisao (alguém confirma manualmente) ou descartado (vencido,
+  // de outra competência, linha digitável inválida, ou duplicado).
+  function decidirDestinoInbox(campos, candidatos){
+    var top = candidatos[0];
+    var hoje = new Date(); hoje.setHours(0,0,0,0);
+    if(top && top.score>=100){
+      var empresaDetectada = top.item.empresa;
+      if(top.item.boletoStatus==='enviado'){
+        return { status:'descartado', motivo:'Já existe um boleto enviado pra esse cliente neste mês — descartado pra evitar duplicidade. Se for engano, restaure e reenvie manualmente.', contratoId:top.item.contratoId, competencia:top.item.competenciaAtual, score:top.score, empresaDetectada:empresaDetectada };
+      }
+      if(campos.linhaDigitavelValida===false){
+        return { status:'descartado', motivo:'Linha digitável não confere (dígito verificador não fecha) — pode ser um arquivo corrompido ou falso. Confira antes de restaurar.', contratoId:top.item.contratoId, competencia:top.item.competenciaAtual, score:top.score, empresaDetectada:empresaDetectada };
+      }
+      if(campos.vencimento && campos.vencimento < hoje){
+        return { status:'descartado', motivo:'Boleto vencido (venceu em '+campos.vencimento.toLocaleDateString('pt-BR')+').', contratoId:top.item.contratoId, competencia:top.item.competenciaAtual, score:top.score, empresaDetectada:empresaDetectada };
+      }
+      if(campos.vencimento){
+        var mesEsperado = parseDataSql(top.item.competenciaAtual) || hoje;
+        var diffMeses = (campos.vencimento.getFullYear()-mesEsperado.getFullYear())*12 + (campos.vencimento.getMonth()-mesEsperado.getMonth());
+        if(diffMeses<0 || diffMeses>1){
+          return { status:'descartado', motivo:'Data de vencimento ('+campos.vencimento.toLocaleDateString('pt-BR')+') não bate com o mês esperado — parece ser de outra competência.', contratoId:top.item.contratoId, competencia:top.item.competenciaAtual, score:top.score, empresaDetectada:empresaDetectada };
+        }
+      }
+      return { status:'auto_atribuido', motivo:null, contratoId:top.item.contratoId, competencia:top.item.competenciaAtual, score:top.score, empresaDetectada:empresaDetectada };
+    }
+    return {
+      status:'pendente_revisao',
+      motivo: top ? ('Não achei o CNPJ batendo com nenhum contrato — meu melhor palpite ('+top.item.empresa+') está pré-selecionado, confirme.') : 'Não consegui identificar o cliente (CNPJ não encontrado ou ilegível no PDF) — selecione manualmente.',
+      contratoId:null, competencia:null, score: top ? top.score : null,
+      empresaDetectada: top ? top.item.empresa : null
+    };
+  }
+
+  function processarArquivoInbox(file){
+    var path = 'inbox/'+Date.now()+'_'+Math.random().toString(36).slice(2,8)+'_'+file.name.replace(/[^A-Za-z0-9._-]/g,'_');
+    return sb.storage.from('boletos').upload(path, file).then(function(upRes){
+      if(upRes.error) throw upRes.error;
+      return extrairTextoPdf(file).catch(function(){ return ''; });
+    }).then(function(texto){
+      var campos = extrairCamposBoleto(texto);
+      var candidatos = candidatosParaBoleto(campos);
+      var decisao = decidirDestinoInbox(campos, candidatos);
+      var linhaBase = {
+        nome_arquivo: file.name, storage_path: path, texto_extraido: (texto||'').slice(0,8000),
+        cnpj_detectado: campos.cnpjs[0]||null, empresa_detectada: decisao.empresaDetectada||null,
+        operadora_detectada: campos.operadoraDetectada||null,
+        vencimento_detectado: campos.vencimento ? (campos.vencimento.getFullYear()+'-'+String(campos.vencimento.getMonth()+1).padStart(2,'0')+'-'+String(campos.vencimento.getDate()).padStart(2,'0')) : null,
+        linha_digitavel: campos.linhaDigitavel||null, linha_digitavel_valida: campos.linhaDigitavelValida,
+        contrato_id: decisao.contratoId||null, competencia: decisao.competencia||null,
+        status: decisao.status, motivo: decisao.motivo||null, score_casamento: decisao.score||null,
+        criado_por: perfil.id, updated_at: new Date().toISOString()
+      };
+      if(decisao.status==='auto_atribuido'){
+        return sb.from('boletos').upsert({
+          contrato_id: decisao.contratoId, competencia: decisao.competencia, status:'baixado',
+          storage_path: path, origem:'manual', criado_por: perfil.id, updated_at: new Date().toISOString()
+        }, { onConflict:'contrato_id,competencia' }).select('id').single().then(function(bRes){
+          if(bRes.error) throw bRes.error;
+          linhaBase.boleto_id = bRes.data.id;
+          return sb.from('boletos_inbox').insert(linhaBase);
+        }).then(function(){ return decisao.status; });
+      }
+      return sb.from('boletos_inbox').insert(linhaBase).then(function(){ return decisao.status; });
+    });
+  }
+
+  function processarLoteInbox(fileList){
+    var files = Array.prototype.slice.call(fileList).filter(function(f){ return f.type==='application/pdf' || /\.pdf$/i.test(f.name); });
+    if(!files.length){ showToast('Selecione arquivos PDF'); return; }
+    boletosCentralProcessando = true;
+    boletosCentralProgresso = { feito:0, total:files.length, autoAtribuidos:0, pendentes:0, descartados:0, erros:0 };
+    renderContent();
+    function proximo(i){
+      if(i>=files.length){
+        boletosCentralProcessando = false;
+        var p = boletosCentralProgresso; boletosCentralProgresso = null;
+        showToast(p.autoAtribuidos+' anexado(s) automaticamente, '+p.pendentes+' pra revisão manual'+(p.descartados?', '+p.descartados+' descartado(s)':'')+(p.erros?', '+p.erros+' com erro':''));
+        refreshData().then(renderContent);
+        return;
+      }
+      processarArquivoInbox(files[i]).then(function(resultado){
+        boletosCentralProgresso.feito++;
+        if(resultado==='auto_atribuido') boletosCentralProgresso.autoAtribuidos++;
+        else if(resultado==='pendente_revisao') boletosCentralProgresso.pendentes++;
+        else if(resultado==='descartado') boletosCentralProgresso.descartados++;
+        renderContent();
+        proximo(i+1);
+      }).catch(function(){
+        boletosCentralProgresso.feito++; boletosCentralProgresso.erros++;
+        renderContent();
+        proximo(i+1);
+      });
+    }
+    proximo(0);
+  }
+
   /* ============== VIEW: Boletos ============== */
   function boletoStatusInfo(item){
     if(item.cadastroIncompleto) return {label:'Cadastro incompleto', cls:'chip-warn', ic:'alert'};
@@ -1879,6 +2243,8 @@
 
   function viewBoletos(){
     if(boletosMode==='importar') return viewBoletosImportar();
+    if(boletosMode==='revisao') return viewBoletosRevisao();
+    if(boletosMode==='descartados') return viewBoletosDescartados();
     var todos = STATE.boletosPainel;
     var contadores = {
       incompleto: todos.filter(function(i){return i.cadastroIncompleto;}).length,
@@ -1887,6 +2253,8 @@
       enviado: todos.filter(function(i){return i.boletoStatus==='enviado';}).length
     };
     var operadoras = Array.from(new Set(todos.map(function(i){return i.operadora;}).filter(Boolean))).sort();
+    var pendentesRevisaoCount = STATE.boletosInbox.filter(function(i){return i.status==='pendente_revisao';}).length;
+    var descartadosCount = STATE.boletosInbox.filter(function(i){return i.status==='descartado';}).length;
     var chipsFiltro = [
       {k:'todos', l:'Todos ('+todos.length+')'},
       {k:'atrasado', l:'Atrasados ('+contadores.atrasado+')'},
@@ -1917,12 +2285,27 @@
         (item.cadastroIncompleto ? '<p class="row-sub" style="color:var(--warning); margin-top:.4rem">Falta '+[!item.diaVencimento&&'dia de vencimento', !item.emailCobranca&&'e-mail', !item.cnpj&&'CNPJ'].filter(Boolean).join(', ')+' — complete o cadastro pra ativar o envio automático.</p>' : '')+
       '</div>';
     }).join('') : '<div class="empty-col">Nada por aqui com esse filtro.</div>';
+    var progresso = boletosCentralProgresso;
+    var centralWidget = '<div class="row-card" style="cursor:default; margin-bottom:.8rem; border-color:var(--gold, var(--border))">'+
+      '<div class="row-top"><div><div class="row-title">'+ic('upload')+' Central de Boletos</div>'+
+      '<div class="row-sub">Anexe vários PDFs de uma vez — o app lê cada um e encaixa automaticamente no cliente certo (por CNPJ). O que não der pra reconhecer sozinho cai em "Revisão manual".</div></div></div>'+
+      '<div class="btn-row" style="margin-top:.6rem; flex-wrap:wrap">'+
+        '<label class="btn btn-primary" style="width:auto; cursor:pointer" for="boletosCentralInput">'+ic('upload')+' '+(boletosCentralProcessando?'Processando...':'Anexar boletos (vários PDFs)')+'</label>'+
+        '<input type="file" id="boletosCentralInput" data-boletos-central-input accept="application/pdf" multiple hidden'+(boletosCentralProcessando?' disabled':'')+' />'+
+      '</div>'+
+      (progresso ? '<p class="row-sub" style="margin-top:.5rem">Processando '+progresso.feito+' de '+progresso.total+'... ('+progresso.autoAtribuidos+' automático(s), '+progresso.pendentes+' pra revisão'+(progresso.descartados?', '+progresso.descartados+' descartado(s)':'')+')</p>' : '')+
+    '</div>';
     return '<div class="content-pad">'+
       '<div style="display:flex; justify-content:space-between; align-items:center; gap:.6rem; margin-bottom:.7rem; flex-wrap:wrap">'+
         '<div class="section-label" style="margin-bottom:0">Boletos</div>'+
-        '<button class="btn btn-primary" style="width:auto" data-boletos-mode="importar">'+ic('upload')+' Importar planilha</button>'+
+        '<div class="btn-row" style="width:auto; flex-wrap:wrap">'+
+          '<button class="btn btn-ghost" style="width:auto" data-boletos-mode="revisao">'+ic('alert')+' Revisão manual ('+pendentesRevisaoCount+')</button>'+
+          '<button class="btn btn-ghost" style="width:auto" data-boletos-mode="descartados">'+ic('doc')+' Descartados ('+descartadosCount+')</button>'+
+          '<button class="btn btn-primary" style="width:auto" data-boletos-mode="importar">'+ic('upload')+' Importar planilha</button>'+
+        '</div>'+
       '</div>'+
       '<p class="row-sub" style="margin-bottom:.7rem">O envio automático dispara 7 dias antes do vencimento, pro e-mail do cliente com cópia pro financeiro — mas só depois que o PDF do boleto do mês estiver anexado aqui.</p>'+
+      centralWidget+
       '<div style="display:flex;gap:.4rem;margin-bottom:.6rem;flex-wrap:wrap">'+chipsFiltro+'</div>'+
       '<div style="display:flex;gap:.5rem;margin-bottom:.8rem;flex-wrap:wrap">'+
         '<input type="text" id="boletosBuscaInput" placeholder="Buscar empresa..." value="'+(boletosBusca||'').replace(/"/g,'&quot;')+'" style="flex:1;min-width:160px;padding:.5rem .7rem;border:1px solid var(--border);border-radius:.5rem;background:var(--surface)" />'+
@@ -1931,6 +2314,75 @@
           operadoras.map(function(o){ return '<option value="'+o+'"'+(boletosFiltroOperadora===o?' selected':'')+'>'+o+'</option>'; }).join('')+
         '</select>'+
       '</div>'+
+      listHtml+
+    '</div>';
+  }
+
+  function viewBoletosRevisao(){
+    var itens = STATE.boletosInbox.filter(function(i){return i.status==='pendente_revisao';})
+      .sort(function(a,b){ return new Date(b.createdAt)-new Date(a.createdAt); });
+    var candidatos = STATE.boletosPainel.filter(function(i){return i.boletoStatus!=='enviado';})
+      .sort(function(a,b){ return (a.empresa||'').localeCompare(b.empresa||''); });
+    var listHtml = itens.length ? itens.map(function(row){
+      var opcoes = '<option value="">Selecione o cliente...</option>'+candidatos.map(function(c){
+        return '<option value="'+c.contratoId+'">'+c.empresa+' — '+c.operadora+(c.ramo?' ('+c.ramo+')':'')+'</option>';
+      }).join('');
+      var dica = [row.empresaDetectada && ('Palpite: '+row.empresaDetectada), row.cnpjDetectado && ('CNPJ no PDF: '+row.cnpjDetectado), row.operadoraDetectada && ('Operadora no PDF: '+row.operadoraDetectada)].filter(Boolean).join(' · ');
+      return '<div class="row-card" style="cursor:default; margin-bottom:.6rem"><div class="row-top">'+
+        '<div><div class="row-title">'+row.nomeArquivo+'</div>'+
+        (dica ? '<div class="row-sub">'+dica+'</div>' : '<div class="row-sub">Não consegui ler nenhum dado do PDF — confira manualmente.</div>')+
+        (row.motivo ? '<div class="row-sub" style="color:var(--warning)">'+row.motivo+'</div>' : '')+
+        '</div><span class="chip chip-warn">'+ic('alert')+' Revisão manual</span></div>'+
+        '<div class="btn-row" style="margin-top:.5rem; flex-wrap:wrap">'+
+          '<button type="button" class="btn btn-ghost" style="width:auto" data-boleto-ver-pdf="'+row.storagePath+'">'+ic('doc')+' Ver PDF</button>'+
+        '</div>'+
+        '<div class="field" style="margin-top:.5rem"><label>Atribuir ao cliente</label>'+
+          '<select data-boleto-inbox-select="'+row.id+'">'+opcoes+'</select>'+
+        '</div>'+
+        '<div class="btn-row" style="margin-top:.5rem; flex-wrap:wrap">'+
+          '<button type="button" class="btn btn-primary" style="width:auto" data-boleto-inbox-atribuir="'+row.id+'">'+ic('check')+' Atribuir e seguir o fluxo</button>'+
+          '<select data-boleto-inbox-motivo="'+row.id+'" style="width:auto">'+
+            '<option value="Não corresponde a nenhum cliente esperando boleto">Não é de nenhum cliente esperando boleto</option>'+
+            '<option value="Boleto vencido">Vencido</option>'+
+            '<option value="Duplicado">Duplicado</option>'+
+            '<option value="Arquivo ilegível ou corrompido">Ilegível/corrompido</option>'+
+            '<option value="Outro motivo">Outro motivo</option>'+
+          '</select>'+
+          '<button type="button" class="btn btn-ghost" style="width:auto" data-boleto-inbox-descartar="'+row.id+'">'+ic('alert')+' Descartar</button>'+
+        '</div>'+
+      '</div>';
+    }).join('') : '<div class="empty-col">Nada esperando revisão — tudo o que foi anexado na Central já foi encaixado automaticamente.</div>';
+    return '<div class="content-pad">'+
+      '<div style="display:flex; justify-content:space-between; align-items:center; gap:.6rem; margin-bottom:.7rem; flex-wrap:wrap">'+
+        '<div class="section-label" style="margin-bottom:0">Revisão manual</div>'+
+        '<button class="btn btn-ghost" style="width:auto" data-boletos-mode="lista">'+ic('chev')+' Voltar</button>'+
+      '</div>'+
+      '<p class="row-sub" style="margin-bottom:.7rem">PDFs que a Central de Boletos não conseguiu casar sozinha com confiança — escolha o cliente certo e o fluxo de envio automático assume a partir daí, ou descarte se não for um boleto válido.</p>'+
+      listHtml+
+    '</div>';
+  }
+
+  function viewBoletosDescartados(){
+    var itens = STATE.boletosInbox.filter(function(i){return i.status==='descartado';})
+      .sort(function(a,b){ return new Date(b.createdAt)-new Date(a.createdAt); });
+    var listHtml = itens.length ? itens.map(function(row){
+      return '<div class="row-card" style="cursor:default; margin-bottom:.6rem"><div class="row-top">'+
+        '<div><div class="row-title">'+row.nomeArquivo+'</div>'+
+        '<div class="row-sub" style="color:var(--critical)">'+(row.motivo||'Descartado')+'</div>'+
+        (row.empresaDetectada ? '<div class="row-sub">Palpite de cliente: '+row.empresaDetectada+'</div>' : '')+
+        '</div></div>'+
+        '<div class="btn-row" style="margin-top:.5rem; flex-wrap:wrap">'+
+          '<button type="button" class="btn btn-ghost" style="width:auto" data-boleto-ver-pdf="'+row.storagePath+'">'+ic('doc')+' Ver PDF</button>'+
+          '<button type="button" class="btn btn-primary" style="width:auto" data-boleto-inbox-restaurar="'+row.id+'">'+ic('check')+' Restaurar pra revisão</button>'+
+        '</div>'+
+      '</div>';
+    }).join('') : '<div class="empty-col">Nenhum boleto descartado.</div>';
+    return '<div class="content-pad">'+
+      '<div style="display:flex; justify-content:space-between; align-items:center; gap:.6rem; margin-bottom:.7rem; flex-wrap:wrap">'+
+        '<div class="section-label" style="margin-bottom:0">Descartados</div>'+
+        '<button class="btn btn-ghost" style="width:auto" data-boletos-mode="lista">'+ic('chev')+' Voltar</button>'+
+      '</div>'+
+      '<p class="row-sub" style="margin-bottom:.7rem">Nada aqui é apagado de verdade — o PDF e o motivo ficam guardados. Se foi engano, restaure pra fila de revisão manual.</p>'+
       listHtml+
     '</div>';
   }
