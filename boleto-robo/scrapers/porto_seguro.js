@@ -8,13 +8,14 @@
 //   ou contrato do cliente e clique 'Ver detalhes' e '2°via de boleto' para
 //   baixar o boleto desejado."
 //
-// ATENÇÃO — leia isto antes de confiar no script (mesmo aviso do amil.js):
-// Escrito só a partir do texto da planilha, sem eu ter aberto o portal real
-// — não tenho rede liberada pra corretor.portoseguro.com.br nesta tarefa.
-// Rode com DEBUG_HEADFUL=1 (localmente) ou olhe os prints de erro salvos
-// pelo runner (erro_porto_seguro_*.png, baixados como artifact no GitHub
-// Actions) pra ajustar os seletores que não baterem, ANTES de deixar isso
-// agendado sem supervisão.
+// ATUALIZADO após o primeiro teste real (screenshot do GitHub Actions): a
+// URL de login foi parar numa página institucional/propaganda da Porto, não
+// direto no formulário de CPF/Senha — precisa clicar em "ACESSAR O CORRETOR
+// ONLINE" primeiro. Também troquei getByLabel por seletor de tipo de campo
+// (mesmo motivo do sulamerica.js — "CPF"/"Senha" no site real não são
+// <label> associados de verdade). Se mesmo assim continuar sem achar os
+// campos, pode ser bloqueio anti-robô da Porto (proteção comum em portal de
+// corretor) — nesse caso não é um ajuste de seletor que resolve.
 // ----------------------------------------------------------------------------
 
 const LOGIN_URL = 'https://corretor.portoseguro.com.br/portal/site/corretoronline/template.LOGIN/';
@@ -24,8 +25,29 @@ async function login(page, { login: cpf, senha }) {
   if (!cpf || !senha) throw new Error('PORTO_SEGURO_LOGIN / PORTO_SEGURO_SENHA não configurados no ambiente.');
   await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded' });
 
-  await page.getByLabel(/^cpf$/i).fill(cpf);
-  await page.getByLabel(/senha/i).fill(senha);
+  // Fecha o banner de cookies, se aparecer.
+  const btnCookie = page.getByRole('button', { name: /accept all cookies|aceitar/i });
+  if (await btnCookie.count()) await btnCookie.first().click().catch(() => {});
+
+  // Se caiu na página institucional (sem campo de senha visível), clica pra
+  // entrar no portal de verdade antes de procurar os campos de login.
+  const campoSenha = page.locator('input[type="password"]').first();
+  if (!(await campoSenha.count())) {
+    const btnAcessar = page.getByRole('link', { name: /acessar o corretor online/i })
+      .or(page.getByRole('button', { name: /acessar o corretor online/i }));
+    if (await btnAcessar.count()) {
+      await btnAcessar.first().click();
+      await page.waitForLoadState('networkidle');
+    }
+  }
+
+  await campoSenha.waitFor({ state: 'visible', timeout: 15000 });
+  const campoCpf = page
+    .locator('input:not([type="password"]):not([type="hidden"]):not([type="checkbox"]):not([type="radio"])')
+    .first();
+
+  await campoCpf.fill(cpf);
+  await campoSenha.fill(senha);
   await page.getByRole('button', { name: /entrar/i }).first().click();
   await page.waitForLoadState('networkidle');
 
