@@ -349,30 +349,40 @@
     return '<span class="chip '+cls+'">'+ic('doc')+' expira em '+dias+'d</span>';
   }
   function shortCode(uuid){ return '#' + String(uuid||'').slice(0,8).toUpperCase(); }
+  // Colunas `date` do Postgres chegam como "YYYY-MM-DD" (sem hora). `new Date(...)`
+  // nessa string pura interpreta como UTC meia-noite, que no horário do Brasil
+  // (UTC-3) já é o dia anterior às 21h — toda data/prazo exibido ficava um dia
+  // atrasado e o cálculo de "atrasada" disparava cedo demais. Datas com hora
+  // (timestamps) continuam sendo parseadas normalmente.
+  function parseDataLocal(dateStr){
+    if(!dateStr) return null;
+    if(/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return new Date(dateStr+'T00:00:00');
+    return new Date(dateStr);
+  }
   function fmtDateBR(dateStr){
     if(!dateStr) return '—';
-    var d = new Date(dateStr);
-    if(isNaN(d.getTime())) return '—';
+    var d = parseDataLocal(dateStr);
+    if(!d || isNaN(d.getTime())) return '—';
     return d.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
   }
   function daysSince(dateStr){
     if(!dateStr) return 0;
-    var d = new Date(dateStr);
-    if(isNaN(d.getTime())) return 0;
+    var d = parseDataLocal(dateStr);
+    if(!d || isNaN(d.getTime())) return 0;
     return Math.max(0, Math.floor((Date.now() - d.getTime())/86400000));
   }
   function daysUntil(dateStr){
     if(!dateStr) return 0;
-    var d = new Date(dateStr);
-    if(isNaN(d.getTime())) return 0;
+    var d = parseDataLocal(dateStr);
+    if(!d || isNaN(d.getTime())) return 0;
     return Math.max(0, Math.ceil((d.getTime() - Date.now())/86400000));
   }
   // Dias corridos entre duas datas/timestamps (usado pro tempo médio de
   // atendimento do pós-vendas). Retorna null se alguma data for inválida.
   function diasEntreDatas(a, b){
     if(!a || !b) return null;
-    var da = new Date(a), db = new Date(b);
-    if(isNaN(da.getTime()) || isNaN(db.getTime())) return null;
+    var da = parseDataLocal(a), db = parseDataLocal(b);
+    if(!da || !db || isNaN(da.getTime()) || isNaN(db.getTime())) return null;
     return Math.max(0, Math.round((db.getTime()-da.getTime())/86400000));
   }
   // Próxima data de aniversário de um contrato (dia/mês), projetando pro
@@ -399,8 +409,8 @@
     if(!dateStr) return false;
     var finals = Array.isArray(finalKeys) ? finalKeys : [finalKeys];
     if(finals.indexOf(etapa)!==-1) return false;
-    var d = new Date(dateStr);
-    if(isNaN(d.getTime())) return false;
+    var d = parseDataLocal(dateStr);
+    if(!d || isNaN(d.getTime())) return false;
     var today = new Date(); today.setHours(0,0,0,0);
     return d < today;
   }
@@ -899,7 +909,7 @@
     var out = [];
     STATE.leads.forEach(function(l){
       if(['fechado','perdido'].indexOf(l.etapa)===-1 && l.dias>=5){
-        out.push({icon:'clock', tone:'warn', text:'Lead <b>'+l.nome+'</b> parado há '+l.dias+' dias em "'+LEAD_STAGES.find(function(s){return s.key===l.etapa;}).label+'".'});
+        out.push({icon:'clock', tone:'warn', text:'Lead <b>'+l.nome+'</b> parado há '+l.dias+' dias em "'+((LEAD_STAGES.find(function(s){return s.key===l.etapa;})||{}).label||l.etapa)+'".'});
       }
       if(l.followupAtrasado){
         out.push({icon:'alert', tone:'crit', text:'Follow-up de <b>'+l.nome+'</b> estava marcado para '+l.followup+' e ainda não foi feito.'});
@@ -1170,7 +1180,7 @@
         if(action==='cancelar'){ conciliacaoPreview = null; conciliacaoMode = 'lista'; renderContent(); return; }
         if(action==='confirmar'){
           el.disabled = true;
-          confirmarImportacaoComissao().catch(function(){ el.disabled = false; showToast('Não deu pra importar — tente de novo'); });
+          confirmarImportacaoComissao().catch(function(err){ el.disabled = false; showToast('Não deu pra importar — tente de novo'); console.error('[Conciliação] falha ao confirmar importação:', err); });
         }
       });
     });
@@ -1205,15 +1215,18 @@
         var path = 'contrato_'+contratoId+'/'+competencia+'_'+Date.now()+'_'+file.name;
         el.disabled = true;
         sb.storage.from('boletos').upload(path, file).then(function(upRes){
-          if(upRes.error){ el.disabled=false; showToast('Não deu pra enviar o PDF'); return; }
+          if(upRes.error){ el.disabled=false; showToast('Não deu pra enviar o PDF'); console.error('[Anexar PDF] falha no upload:', upRes.error); throw upRes.error; }
           return sb.from('boletos').upsert({
             contrato_id: contratoId, competencia: competencia, status: 'baixado',
             storage_path: path, origem: 'manual', criado_por: perfil.id, updated_at: new Date().toISOString()
           }, { onConflict: 'contrato_id,competencia' });
         }).then(function(res){
-          if(res && res.error){ showToast('PDF enviado, mas não deu pra registrar — tente de novo'); return; }
+          if(res.error){ el.disabled=false; showToast('PDF enviado, mas não deu pra registrar — tente de novo'); console.error('[Anexar PDF] falha ao registrar:', res.error); return; }
           showToast('Boleto anexado');
           refreshData().then(renderContent);
+        }).catch(function(err){
+          el.disabled = false;
+          console.error('[Anexar PDF] erro inesperado:', err);
         });
       });
     });
@@ -1271,9 +1284,10 @@
           showToast('Boleto atribuído a '+item.empresa+' — segue o fluxo normal de envio');
           delete boletosRevisaoEscolha[inboxId];
           refreshData().then(renderContent);
-        }).catch(function(){
+        }).catch(function(err){
           el.disabled = false;
           showToast('Não deu pra atribuir — tente de novo');
+          console.error('[Revisão manual] falha ao atribuir:', err);
         });
       });
     });
@@ -1284,7 +1298,7 @@
         var motivo = selMotivo ? selMotivo.value : 'Descartado manualmente';
         el.disabled = true;
         sb.from('boletos_inbox').update({ status:'descartado', motivo:motivo, decidido_por: perfil.id, updated_at: new Date().toISOString() }).eq('id', inboxId).then(function(res){
-          if(res.error){ el.disabled=false; showToast('Não deu pra descartar — tente de novo'); return; }
+          if(res.error){ el.disabled=false; showToast('Não deu pra descartar — tente de novo'); console.error('[Descartar boleto]', res.error); return; }
           showToast('Boleto descartado');
           refreshData().then(renderContent);
         });
@@ -1294,7 +1308,7 @@
       el.addEventListener('click', function(){
         el.disabled = true;
         sb.from('boletos_inbox').update({ status:'pendente_revisao', motivo: null, decidido_por: perfil.id, updated_at: new Date().toISOString() }).eq('id', el.dataset.boletoInboxRestaurar).then(function(res){
-          if(res.error){ el.disabled=false; showToast('Não deu pra restaurar — tente de novo'); return; }
+          if(res.error){ el.disabled=false; showToast('Não deu pra restaurar — tente de novo'); console.error('[Restaurar boleto]', res.error); return; }
           showToast('Restaurado pra revisão manual');
           refreshData().then(renderContent);
         });
@@ -1508,7 +1522,7 @@
 
   function fetchRecibosMensais(){
     return sb.from('recibos_mensais').select('*, colaborador:perfis!recibos_mensais_colaborador_id_fkey(nome)').order('referencia_mes', {ascending:false}).then(function(res){
-      if(res.error){ STATE.recibosMensais=[]; return; }
+      if(res.error){ console.error('[fetchRecibosMensais]', res.error); showToast('Erro ao carregar recibos'); STATE.recibosMensais=[]; return; }
       STATE.recibosMensais = (res.data||[]).map(function(r){
         var refDate = new Date(r.referencia_mes+'T00:00:00');
         return {
@@ -1522,6 +1536,7 @@
 
   function fetchRecibosLancamentos(){
     return sb.from('recibo_lancamentos').select('*').order('semana_inicio', {ascending:true}).then(function(res){
+      if(res.error) console.error('[fetchRecibosLancamentos]', res.error);
       STATE.recibosLancamentos = res.error ? [] : (res.data||[]).map(function(r){
         return { id:r.id, reciboId:r.recibo_id, semanaInicio:r.semana_inicio, semanaFim:r.semana_fim, tipo:r.tipo, descricao:r.descricao, valor:Number(r.valor)||0 };
       });
@@ -1530,19 +1545,21 @@
 
   function fetchEquipeInterna(){
     return sb.from('perfis').select('id,nome,papel,valor_fixo_quinzenal,tipo_fixo').in('papel', ['vendedor','administrativo','posvendas','gestao','implantacao']).order('nome').then(function(res){
+      if(res.error) console.error('[fetchEquipeInterna]', res.error);
       STATE.equipeInterna = res.error ? [] : (res.data||[]);
     });
   }
 
   function fetchEmpresasAll(){
     return sb.from('empresas').select('id,nome,cnpj').order('nome').then(function(res){
+      if(res.error) console.error('[fetchEmpresasAll]', res.error);
       STATE.empresasAll = res.error ? [] : (res.data||[]);
     });
   }
 
   function fetchBoletosPainel(){
     return sb.from('boletos_painel').select('*').order('dias_restantes', {ascending:true, nullsFirst:false}).then(function(res){
-      if(res.error){ STATE.boletosPainel = []; return; }
+      if(res.error){ console.error('[fetchBoletosPainel]', res.error); showToast('Erro ao carregar boletos'); STATE.boletosPainel = []; return; }
       STATE.boletosPainel = (res.data||[]).map(function(r){
         return {
           contratoId:r.contrato_id, empresa:r.empresa, cnpj:r.cnpj, operadora:r.operadora, ramo:r.ramo,
@@ -1557,7 +1574,7 @@
 
   function fetchBoletosInbox(){
     return sb.from('boletos_inbox').select('*').order('created_at', {ascending:false}).then(function(res){
-      if(res.error){ STATE.boletosInbox = []; return; }
+      if(res.error){ console.error('[fetchBoletosInbox]', res.error); showToast('Erro ao carregar a Central de Boletos'); STATE.boletosInbox = []; return; }
       STATE.boletosInbox = (res.data||[]).map(function(r){
         return {
           id:r.id, nomeArquivo:r.nome_arquivo, storagePath:r.storage_path,
@@ -1574,7 +1591,7 @@
 
   function fetchComissaoAcompanhamentos(){
     return sb.from('comissao_acompanhamentos').select('*').order('updated_at', {ascending:false}).then(function(res){
-      if(res.error){ STATE.comissaoAcompanhamentos = []; return; }
+      if(res.error){ console.error('[fetchComissaoAcompanhamentos]', res.error); showToast('Erro ao carregar acompanhamento de comissões'); STATE.comissaoAcompanhamentos = []; return; }
       var rows = res.data||[];
       return fetchHistoricoFor('comissao', rows.map(function(r){return r.id;})).then(function(hist){
         STATE.comissaoAcompanhamentos = rows.map(function(r){
@@ -1596,13 +1613,14 @@
 
   function fetchLeadAtendimentos(){
     return sb.from('lead_atendimentos').select('*, leads(nome_contato), vendedor:perfis(nome)').order('updated_at', {ascending:false}).then(function(res){
-      if(res.error){ STATE.leadAtendimentos = []; return; }
+      if(res.error){ console.error('[fetchLeadAtendimentos]', res.error); showToast('Erro ao carregar atendimentos'); STATE.leadAtendimentos = []; return; }
       var rows = res.data||[];
       var ids = rows.map(function(r){return r.id;});
       var mensagensPromise = ids.length
         ? sb.from('lead_atendimento_mensagens').select('*').in('atendimento_id', ids).order('ordem', {ascending:true})
         : Promise.resolve({data:[]});
       return mensagensPromise.then(function(msgRes){
+        if(msgRes.error) console.error('[fetchLeadAtendimentos:mensagens]', msgRes.error);
         var porAtendimento = {};
         (msgRes.data||[]).forEach(function(m){
           (porAtendimento[m.atendimento_id] = porAtendimento[m.atendimento_id]||[]).push({ papel:m.papel, texto:m.texto, ordem:m.ordem });
@@ -1623,7 +1641,7 @@
 
   function fetchContratos(){
     return sb.from('contratos').select('*, empresas(nome), vendedor:perfis(nome)').eq('status','ativo').order('created_at', {ascending:false}).then(function(res){
-      if(res.error){ STATE.contratos=[]; return; }
+      if(res.error){ console.error('[fetchContratos]', res.error); showToast('Erro ao carregar contratos'); STATE.contratos=[]; return; }
       STATE.contratos = (res.data||[]).map(function(r){
         return {
           id:r.id, empresaId:r.empresa_id, empresaNome:(r.empresas && r.empresas.nome)||'—',
@@ -1638,7 +1656,7 @@
 
   function fetchSegurados(){
     return sb.from('segurados').select('*, empresas(nome), contratos(operadora)').order('nome').then(function(res){
-      if(res.error){ STATE.segurados=[]; return; }
+      if(res.error){ console.error('[fetchSegurados]', res.error); showToast('Erro ao carregar segurados'); STATE.segurados=[]; return; }
       STATE.segurados = (res.data||[]).map(function(r){
         return {
           id:r.id, contratoId:r.contrato_id, empresaId:r.empresa_id, empresaNome:(r.empresas && r.empresas.nome)||'—',
@@ -1650,7 +1668,7 @@
 
   function fetchComissoes(){
     return sb.from('comissoes').select('*, empresas(nome), vendedor:perfis(nome)').order('referencia_mes', {ascending:false}).then(function(res){
-      if(res.error){ STATE.comissoes=[]; return; }
+      if(res.error){ console.error('[fetchComissoes]', res.error); showToast('Erro ao carregar comissões'); STATE.comissoes=[]; return; }
       STATE.comissoes = (res.data||[]).map(function(r){
         return {
           id:r.id, contratoId:r.contrato_id, empresaId:r.empresa_id, empresaNome:(r.empresas && r.empresas.nome)||'—',
@@ -2030,7 +2048,12 @@
       });
       if(maisPerto && menorDist<200) return maisPerto.data;
     }
-    return datas[0].data;
+    // Não achei a palavra "VENCIMENTO" perto de nenhuma data — só arrisco um
+    // palpite se houver exatamente UMA data no documento inteiro (boleto
+    // simples); com várias datas candidatas é melhor não adivinhar (a
+    // validação de vencimento é pulada e o item segue por CNPJ/empresa) do
+    // que confundir data de emissão com vencimento.
+    return datas.length===1 ? datas[0].data : null;
   }
 
   // Linha digitável (código de barras "digitado" do boleto bancário) tem
@@ -2179,9 +2202,9 @@
           if(bRes.error) throw bRes.error;
           linhaBase.boleto_id = bRes.data.id;
           return sb.from('boletos_inbox').insert(linhaBase);
-        }).then(function(){ return decisao.status; });
+        }).then(function(iRes){ if(iRes.error) throw iRes.error; return decisao.status; });
       }
-      return sb.from('boletos_inbox').insert(linhaBase).then(function(){ return decisao.status; });
+      return sb.from('boletos_inbox').insert(linhaBase).then(function(iRes){ if(iRes.error) throw iRes.error; return decisao.status; });
     });
   }
 
@@ -2195,7 +2218,7 @@
       if(i>=files.length){
         boletosCentralProcessando = false;
         var p = boletosCentralProgresso; boletosCentralProgresso = null;
-        showToast(p.autoAtribuidos+' anexado(s) automaticamente, '+p.pendentes+' pra revisão manual'+(p.descartados?', '+p.descartados+' descartado(s)':'')+(p.erros?', '+p.erros+' com erro':''));
+        showToast(p.autoAtribuidos+' anexado(s) automaticamente, '+p.pendentes+' pra revisão manual'+(p.descartados?', '+p.descartados+' descartado(s)':'')+(p.erros?', '+p.erros+' com erro'+(p.ultimoErro?' — '+p.ultimoErro:'')+' (veja o Console pra detalhes)':''));
         refreshData().then(renderContent);
         return;
       }
@@ -2206,8 +2229,10 @@
         else if(resultado==='descartado') boletosCentralProgresso.descartados++;
         renderContent();
         proximo(i+1);
-      }).catch(function(){
+      }).catch(function(err){
+        console.error('[Central de Boletos] Falha ao processar "'+files[i].name+'":', err);
         boletosCentralProgresso.feito++; boletosCentralProgresso.erros++;
+        boletosCentralProgresso.ultimoErro = (err && (err.message || err.error_description || err.msg || err.statusText)) || 'erro desconhecido (veja o Console)';
         renderContent();
         proximo(i+1);
       });
@@ -2520,7 +2545,7 @@
       if(!linhas.length){ btn.disabled=false; showToast('Não encontrei linhas válidas — confira o cabeçalho da planilha.'); return; }
       boletosImportPreview = montarPreviewBoletosImportacao(file.name, linhas);
       renderContent();
-    }).catch(function(err){ btn.disabled=false; showToast('Não consegui ler esse arquivo — confira se é .xlsx ou .csv.'); });
+    }).catch(function(err){ btn.disabled=false; showToast('Não consegui ler esse arquivo — confira se é .xlsx ou .csv.'); console.error('[Importar planilha de boletos]', err); });
   }
 
   function confirmarImportacaoBoletos(){
@@ -2542,7 +2567,7 @@
           email_cobranca: l.emails, contato_nome: l.contato, telefone_contato: l.telefone,
           tipo_negocio: 'boleto', valor_mensal: 0, dia_aniversario: l.venc||1, mes_aniversario: (new Date()).getMonth()+1
         });
-      }).then(function(){ okCount++; }).catch(function(){ errCount++; }).then(function(){ processarProxima(i+1); });
+      }).then(function(res){ if(res && res.error) throw res.error; okCount++; }).catch(function(err){ errCount++; console.error('[Importar planilha de boletos] linha '+i+' ('+l.empresa+'):', err); }).then(function(){ processarProxima(i+1); });
     }
     processarProxima(0);
   }
@@ -2625,14 +2650,22 @@
       var row = res.data;
       var texto = obs ? ('Solicitação enviada pelo app. Observação: '+obs) : 'Solicitação enviada pelo app.';
       var afterHist = sb.from('historico').insert({ entidade_tipo:'solicitacao', entidade_id: row.id, texto: texto, created_by: perfil.id });
+      var anexoOk = true;
       var afterUpload = file
         ? sb.storage.from('documentos').upload('solicitacao_'+row.id+'/'+Date.now()+'_'+file.name, file).then(function(upRes){
-            if(upRes.error) return;
-            return sb.from('anexos').insert({ solicitacao_id: row.id, nome_arquivo: file.name, storage_path: upRes.data.path, tamanho_bytes: file.size, enviado_por: perfil.id });
+            if(upRes.error){ anexoOk = false; console.error('[Nova Solicitação] falha no upload do anexo:', upRes.error); return; }
+            return sb.from('anexos').insert({ solicitacao_id: row.id, nome_arquivo: file.name, storage_path: upRes.data.path, tamanho_bytes: file.size, enviado_por: perfil.id }).then(function(aRes){
+              if(aRes.error){ anexoOk = false; console.error('[Nova Solicitação] falha ao registrar anexo:', aRes.error); }
+            });
           })
         : Promise.resolve();
       Promise.all([afterHist, afterUpload]).then(function(){
-        showToast('Solicitação enviada');
+        showToast(anexoOk ? 'Solicitação enviada' : 'Solicitação enviada, mas o anexo não foi salvo — tente anexar de novo');
+        lastTabByRole[perfil.papel] = origemTipo==='rh' ? 'minhas-rh' : 'minhas-cli';
+        refreshData().then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); btn.disabled=false; });
+      }).catch(function(err){
+        console.error('[Nova Solicitação] erro inesperado:', err);
+        showToast('Solicitação enviada, mas algo deu errado — confira depois');
         lastTabByRole[perfil.papel] = origemTipo==='rh' ? 'minhas-rh' : 'minhas-cli';
         refreshData().then(function(){ renderAppBar(); renderBottomTabbar(); renderContent(); btn.disabled=false; });
       });
@@ -3097,7 +3130,7 @@
       if(!linhas.length){ btn.disabled=false; showToast('Não consegui reconhecer nenhuma linha nesse arquivo — confira se é a operadora certa.'); return; }
       conciliacaoPreview = montarPreviewImportacao(operadora, file.name, linhas);
       renderContent();
-    }).catch(function(){ btn.disabled=false; showToast('Não consegui ler esse arquivo — tente de novo.'); });
+    }).catch(function(err){ btn.disabled=false; showToast('Não consegui ler esse arquivo — tente de novo.'); console.error('[Importar comissão]', err); });
   }
 
   function montarPreviewImportacao(operadora, nomeArquivo, linhas){
@@ -3636,11 +3669,11 @@
       empresa_id: empresaId, operadora: operadora, vendedor_id: vendedorId, tipo_negocio: tipoNegocio || null,
       valor_mensal: valorMensal, dia_aniversario: dia, mes_aniversario: mes
     }).then(function(res){
-      if(res.error){ btn.disabled=false; showToast('Não deu pra salvar — tente de novo'); return; }
+      if(res.error){ btn.disabled=false; showToast('Não deu pra salvar — tente de novo'); console.error('[Novo contrato]', res.error); return; }
       showToast('Contrato salvo');
       painelFinMode = 'lista'; painelFinTab = 'reajustes';
       refreshData().then(function(){ renderAppBar(); renderContent(); btn.disabled=false; });
-    });
+    }).catch(function(err){ btn.disabled=false; showToast('Não deu pra salvar — tente de novo'); console.error('[Novo contrato] erro inesperado:', err); });
   }
 
   function viewNovoSegurado(){
@@ -3671,12 +3704,12 @@
     var btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
     sb.from('segurados').insert({ contrato_id: contratoId, empresa_id: contrato.empresaId, nome: nome }).then(function(res){
-      if(res.error){ btn.disabled=false; showToast('Não deu pra salvar — tente de novo'); return; }
+      if(res.error){ btn.disabled=false; showToast('Não deu pra salvar — tente de novo'); console.error('[Novo segurado]', res.error); return; }
       showToast('Pessoa segurada cadastrada');
       painelFinContratoId = null;
       painelFinMode = 'lista'; painelFinTab = 'inadimplencia';
       refreshData().then(function(){ renderAppBar(); renderContent(); btn.disabled=false; });
-    });
+    }).catch(function(err){ btn.disabled=false; showToast('Não deu pra salvar — tente de novo'); console.error('[Novo segurado] erro inesperado:', err); });
   }
 
   function viewNovaComissao(){
@@ -3718,12 +3751,12 @@
       contrato_id: contratoId, empresa_id: contrato.empresaId, operadora: contrato.operadora,
       vendedor_id: contrato.vendedorId, referencia_mes: referencia+'-01', valor_previsto: valorPrevisto
     }).then(function(res){
-      if(res.error){ btn.disabled=false; showToast('Não deu pra lançar — tente de novo'); return; }
+      if(res.error){ btn.disabled=false; showToast('Não deu pra lançar — tente de novo'); console.error('[Nova comissão]', res.error); return; }
       showToast('Comissão lançada');
       painelFinContratoId = null;
       painelFinMode = 'lista'; painelFinTab = 'comissoes';
       refreshData().then(function(){ renderAppBar(); renderContent(); btn.disabled=false; });
-    });
+    }).catch(function(err){ btn.disabled=false; showToast('Não deu pra lançar — tente de novo'); console.error('[Nova comissão] erro inesperado:', err); });
   }
 
   function openContratoDetail(id){
@@ -3936,7 +3969,7 @@
     var l = STATE.leads.find(function(x){return x.id===id;});
     if(!l) return;
     var nextStage = {novo:'contato', contato:'proposta', proposta:'negociacao', negociacao:'fechado'}[l.etapa];
-    var stageLabel = function(k){ return LEAD_STAGES.find(function(s){return s.key===k;}).label; };
+    var stageLabel = function(k){ return (LEAD_STAGES.find(function(s){return s.key===k;})||{}).label||k; };
     var souDono = l.vendedorId === perfil.id;
     var podeGerenciar = (perfil.papel==='vendedor' && souDono) || perfil.papel==='administrativo' || perfil.papel==='gestao';
     var html = '<h3>'+l.nome+'</h3><p class="row-sub" style="margin-bottom:.7rem">'+l.empresa+' · '+l.tipo+'</p>'+
@@ -4215,15 +4248,19 @@
         if(!file) return;
         var path = 'solicitacao_'+id+'/'+Date.now()+'_'+file.name;
         sb.storage.from('documentos').upload(path, file).then(function(upRes){
-          if(upRes.error){ showToast('Não deu pra enviar o documento'); return; }
-          Promise.all([
+          if(upRes.error){ showToast('Não deu pra enviar o documento'); console.error('[Reenviar documento] falha no upload:', upRes.error); throw upRes.error; }
+          return Promise.all([
             sb.from('anexos').insert({ solicitacao_id:id, nome_arquivo:file.name, storage_path:path, tamanho_bytes:file.size, enviado_por:perfil.id }),
             sb.from('historico').insert({ entidade_tipo:'solicitacao', entidade_id:id, texto:'Documento reenviado pelo app.', created_by:perfil.id })
-          ]).then(function(){
+          ]).then(function(results){
+            var err = results.filter(function(r){ return r && r.error; })[0];
+            if(err){ showToast('Documento enviado, mas não deu pra registrar — tente de novo'); console.error('[Reenviar documento] falha ao registrar:', err.error); return; }
             showToast('Documento enviado — aguardando conferência do pós-vendas');
             closeSheet();
             refreshData().then(renderContent);
           });
+        }).catch(function(err){
+          console.error('[Reenviar documento] erro inesperado:', err);
         });
       });
     }
@@ -4248,7 +4285,7 @@
           });
         } else if(action==='lead-advance'){
           work = sb.from('leads').update({etapa:to, updated_at:new Date().toISOString()}).eq('id', id)
-            .then(function(){ return addHistorico('lead', id, 'Movido para "'+LEAD_STAGES.find(function(s){return s.key===to;}).label+'".'); })
+            .then(function(){ return addHistorico('lead', id, 'Movido para "'+((LEAD_STAGES.find(function(s){return s.key===to;})||{}).label||to)+'".'); })
             .then(function(){ showToast('Lead atualizado'); });
         } else if(action==='task-advance'){
           work = sb.from('tarefas_admin').update({etapa:to}).eq('id', id).then(function(){ showToast('Tarefa atualizada'); });
