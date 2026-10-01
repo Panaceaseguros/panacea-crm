@@ -1212,7 +1212,14 @@
       el.addEventListener('click', function(){
         var dia = Number(el.dataset.boletosDia);
         boletosFiltroDia = (boletosFiltroDia===dia) ? null : dia;
+        // Limpa o filtro de status ao trocar de dia — senão um filtro de status
+        // escolhido antes (tipo "Enviados este mês") pode deixar a lista do dia
+        // vazia sem motivo aparente, parecendo que o clique não fez nada.
+        if(boletosFiltroDia!=null) boletosFiltroStatus = 'todos';
         renderContent();
+        // Rola até o resumo do dia pra deixar claro que o clique funcionou.
+        var resumo = document.getElementById('boletosResumoDia');
+        if(resumo) resumo.scrollIntoView({ behavior:'smooth', block:'start' });
       });
     });
     var boletosDiaLimpar = document.getElementById('boletosDiaLimpar');
@@ -1234,20 +1241,63 @@
         var file = el.files && el.files[0];
         if(!file) return;
         var contratoId = el.dataset.contratoId, competencia = el.dataset.competencia;
+        var alvo = STATE.boletosPainel.find(function(i){ return String(i.contratoId)===String(contratoId); });
         var path = 'contrato_'+contratoId+'/'+competencia+'_'+Date.now()+'_'+file.name;
         el.disabled = true;
         sb.storage.from('boletos').upload(path, file).then(function(upRes){
           if(upRes.error){ el.disabled=false; showToast('Não deu pra enviar o PDF'); console.error('[Anexar PDF] falha no upload:', upRes.error); throw upRes.error; }
+          // Lê o PDF antes de anexar de vez — pra pegar um boleto vencido, de outra
+          // competência, ou (o mais perigoso) de outro cliente antes de entrar no
+          // fluxo de envio automático. Sem isso, um PDF trocado por engano ia direto
+          // sem ninguém perceber, igual o usuário reportou.
+          return extrairTextoPdf(file).catch(function(){ return ''; });
+        }).then(function(texto){
+          var campos = extrairCamposBoleto(texto||'');
+          var hoje = new Date(); hoje.setHours(0,0,0,0);
+          var problemas = [];
+          if(alvo && alvo.cnpj && campos.cnpjs.length){
+            var cnpjAlvo = String(alvo.cnpj).replace(/\D/g,'');
+            if(cnpjAlvo && campos.cnpjs.indexOf(cnpjAlvo)===-1) problemas.push('O CNPJ do PDF não bate com o cadastro de '+alvo.empresa+' — confira se não é boleto de outro cliente.');
+          }
+          if(campos.linhaDigitavelValida===false) problemas.push('Linha digitável não confere (dígito verificador não fecha) — pode ser um arquivo corrompido.');
+          if(campos.vencimento && campos.vencimento < hoje) problemas.push('Boleto já vencido (venceu em '+campos.vencimento.toLocaleDateString('pt-BR')+').');
+          if(campos.vencimento){
+            var mesEsperado = parseDataSql(competencia) || hoje;
+            var diffMeses = (campos.vencimento.getFullYear()-mesEsperado.getFullYear())*12 + (campos.vencimento.getMonth()-mesEsperado.getMonth());
+            if(diffMeses<0 || diffMeses>1) problemas.push('Vencimento ('+campos.vencimento.toLocaleDateString('pt-BR')+') não bate com o mês esperado — pode ser de outra competência.');
+          }
+          if(problemas.length){
+            // Não anexa direto: fica em Revisão manual (gera alerta/sino e conta no
+            // badge), com esse cliente já pré-selecionado — alguém confirma antes
+            // de entrar no fluxo automático de envio.
+            var linhaBase = {
+              nome_arquivo: file.name, storage_path: path, texto_extraido: (texto||'').slice(0,8000),
+              cnpj_detectado: campos.cnpjs[0]||null, empresa_detectada: alvo?alvo.empresa:null,
+              operadora_detectada: campos.operadoraDetectada||null,
+              vencimento_detectado: campos.vencimento ? (campos.vencimento.getFullYear()+'-'+String(campos.vencimento.getMonth()+1).padStart(2,'0')+'-'+String(campos.vencimento.getDate()).padStart(2,'0')) : null,
+              linha_digitavel: campos.linhaDigitavel||null, linha_digitavel_valida: campos.linhaDigitavelValida,
+              contrato_id: contratoId, competencia: competencia,
+              status: 'pendente_revisao', motivo: problemas.join(' '), score_casamento: null,
+              criado_por: perfil.id, updated_at: new Date().toISOString()
+            };
+            return sb.from('boletos_inbox').insert(linhaBase).then(function(iRes){
+              if(iRes.error) throw iRes.error;
+              el.disabled = false;
+              showToast('Não anexei direto: '+problemas[0]+' — confira em "Revisão manual"');
+              refreshData().then(renderContent);
+            });
+          }
           return sb.from('boletos').upsert({
             contrato_id: contratoId, competencia: competencia, status: 'baixado',
             storage_path: path, origem: 'manual', criado_por: perfil.id, updated_at: new Date().toISOString()
-          }, { onConflict: 'contrato_id,competencia' });
-        }).then(function(res){
-          if(res.error){ el.disabled=false; showToast('PDF enviado, mas não deu pra registrar — tente de novo'); console.error('[Anexar PDF] falha ao registrar:', res.error); return; }
-          showToast('Boleto anexado');
-          refreshData().then(renderContent);
+          }, { onConflict: 'contrato_id,competencia' }).then(function(res){
+            if(res.error){ el.disabled=false; showToast('PDF enviado, mas não deu pra registrar — tente de novo'); console.error('[Anexar PDF] falha ao registrar:', res.error); return; }
+            showToast('Boleto anexado');
+            refreshData().then(renderContent);
+          });
         }).catch(function(err){
           el.disabled = false;
+          showToast('Não deu pra processar o PDF — tente de novo');
           console.error('[Anexar PDF] erro inesperado:', err);
         });
       });
@@ -2141,7 +2191,14 @@
   // mês) contra o que foi lido do PDF. CNPJ batendo sozinho já garante
   // confiança alta; nome da empresa/operadora no texto são reforço.
   function candidatosParaBoleto(campos){
-    var pendentes = STATE.boletosPainel.filter(function(i){ return !i.cadastroIncompleto; });
+    var pendentes = STATE.boletosPainel.filter(function(i){
+      if(i.cadastroIncompleto) return false;
+      // Com um dia do calendário selecionado, só casa PDFs soltos na Central
+      // contra clientes que vencem nesse dia — evita um CNPJ com score baixo
+      // "roubar" o palpite de um cliente de outro dia por coincidência.
+      if(boletosFiltroDia!=null && i.diaVencimento!==boletosFiltroDia) return false;
+      return true;
+    });
     var textoNorm = normalizarTexto(campos.texto);
     var textoNormSemEspaco = textoNorm.replace(/ /g,'');
     return pendentes.map(function(item){
@@ -2356,6 +2413,40 @@
     '</div>';
   }
 
+  // Resumo por cliente do dia selecionado no calendário: quantos boletos
+  // (desse dia) já foram anexados e quantos já foram enviados, em formato
+  // "X/Y" — pra quem do pós-vendas bater o olho e saber o que falta sem
+  // precisar abrir card por card. Normalmente Y=1 (1 contrato por cliente),
+  // mas um cliente com mais de um contrato vencendo no mesmo dia soma certo.
+  function boletosResumoDiaHtml(itensDoDia){
+    if(!itensDoDia.length) return '';
+    var porEmpresa = {};
+    itensDoDia.forEach(function(item){
+      (porEmpresa[item.empresa] = porEmpresa[item.empresa] || []).push(item);
+    });
+    var nomes = Object.keys(porEmpresa).sort(function(a,b){ return a.localeCompare(b); });
+    var linhas = nomes.map(function(nome){
+      var grupo = porEmpresa[nome];
+      var total = grupo.length;
+      var anexados = grupo.filter(function(i){ return !!i.storagePath; }).length;
+      var enviados = grupo.filter(function(i){ return i.boletoStatus==='enviado'; }).length;
+      var clsAnexo = anexados===total ? 'chip-ok' : (anexados>0 ? 'chip-gold' : 'chip-neutral');
+      var clsEnvio = enviados===total ? 'chip-ok' : (enviados>0 ? 'chip-gold' : 'chip-neutral');
+      return '<div style="display:flex; justify-content:space-between; align-items:center; gap:.5rem; padding:.45rem 0; border-bottom:1px solid var(--border); flex-wrap:wrap">'+
+        '<div style="font-weight:700; font-size:.85rem">'+nome+'</div>'+
+        '<div style="display:flex; gap:.4rem; flex-wrap:wrap">'+
+          '<span class="chip '+clsAnexo+'">'+ic('upload')+' Anexado '+anexados+'/'+total+'</span>'+
+          '<span class="chip '+clsEnvio+'">'+ic('check')+' Enviado '+enviados+'/'+total+'</span>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+    return '<div class="row-card" id="boletosResumoDia" style="cursor:default; margin-bottom:.8rem">'+
+      '<div class="row-title" style="margin-bottom:.3rem">'+ic('cal')+' Clientes do dia '+boletosFiltroDia+'</div>'+
+      '<div class="row-sub" style="margin-bottom:.4rem">Solte os PDFs desses clientes na Central de Boletos acima, ou anexe um por um na lista abaixo.</div>'+
+      linhas+
+    '</div>';
+  }
+
   function boletosFiltrados(){
     var busca = (boletosBusca||'').toLowerCase().trim();
     return STATE.boletosPainel.filter(function(item){
@@ -2398,6 +2489,7 @@
       var da = a.diasRestantes==null ? 9999 : a.diasRestantes, db = b.diasRestantes==null ? 9999 : b.diasRestantes;
       return da-db;
     });
+    var resumoDiaHtml = boletosFiltroDia!=null ? boletosResumoDiaHtml(itens) : '';
     var listHtml = itens.length ? itens.map(function(item){
       var st = boletoStatusInfo(item);
       var podeEnviarAgora = !item.cadastroIncompleto && (item.boletoStatus==='baixado' || item.boletoStatus==='erro');
@@ -2418,7 +2510,7 @@
     var progresso = boletosCentralProgresso;
     var centralWidget = '<div class="row-card" style="cursor:default; margin-bottom:.8rem; border-color:var(--gold, var(--border))">'+
       '<div class="row-top"><div><div class="row-title">'+ic('upload')+' Central de Boletos</div>'+
-      '<div class="row-sub">Anexe vários PDFs de uma vez — o app lê cada um e encaixa automaticamente no cliente certo (por CNPJ). O que não der pra reconhecer sozinho cai em "Revisão manual".</div></div></div>'+
+      '<div class="row-sub">'+(boletosFiltroDia!=null ? 'Com o dia '+boletosFiltroDia+' selecionado no calendário, os PDFs soltos aqui só são testados contra os clientes que vencem nesse dia.' : 'Anexe vários PDFs de uma vez — o app lê cada um e encaixa automaticamente no cliente certo (por CNPJ). O que não der pra reconhecer sozinho cai em "Revisão manual".')+'</div></div></div>'+
       '<div class="btn-row" style="margin-top:.6rem; flex-wrap:wrap">'+
         '<label class="btn btn-primary" style="width:auto; cursor:pointer" for="boletosCentralInput">'+ic('upload')+' '+(boletosCentralProcessando?'Processando...':'Anexar boletos (vários PDFs)')+'</label>'+
         '<input type="file" id="boletosCentralInput" data-boletos-central-input accept="application/pdf" multiple hidden'+(boletosCentralProcessando?' disabled':'')+' />'+
@@ -2437,6 +2529,7 @@
       '<p class="row-sub" style="margin-bottom:.7rem">O envio automático dispara 7 dias antes do vencimento, pro e-mail do cliente com cópia pro financeiro — mas só depois que o PDF do boleto do mês estiver anexado aqui.</p>'+
       boletosCalendarioHtml()+
       centralWidget+
+      resumoDiaHtml+
       '<div style="display:flex;gap:.4rem;margin-bottom:.6rem;flex-wrap:wrap">'+chipsFiltro+'</div>'+
       '<div style="display:flex;gap:.5rem;margin-bottom:.8rem;flex-wrap:wrap">'+
         '<input type="text" id="boletosBuscaInput" placeholder="Buscar empresa..." value="'+(boletosBusca||'').replace(/"/g,'&quot;')+'" style="flex:1;min-width:160px;padding:.5rem .7rem;border:1px solid var(--border);border-radius:.5rem;background:var(--surface)" />'+
