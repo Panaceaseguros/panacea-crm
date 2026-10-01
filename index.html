@@ -1250,7 +1250,11 @@
     });
     var boletosCentralInput = document.getElementById('boletosCentralInput');
     if(boletosCentralInput) boletosCentralInput.addEventListener('change', function(){
-      var files = boletosCentralInput.files;
+      // input.files é uma FileList "viva": resetar boletosCentralInput.value logo abaixo
+      // (pra permitir selecionar o mesmo arquivo de novo depois) zera essa mesma lista se
+      // a gente só guardar uma referência a ela. Por isso copiamos pra um array de verdade
+      // primeiro — daí o reset do value não apaga o que já foi capturado.
+      var files = Array.prototype.slice.call(boletosCentralInput.files || []);
       boletosCentralInput.value = '';
       if(files && files.length) processarLoteInbox(files);
     });
